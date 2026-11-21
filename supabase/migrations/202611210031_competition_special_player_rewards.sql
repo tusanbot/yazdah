@@ -80,7 +80,8 @@ as $$
 begin
   if new.status='completed' and old.status is distinct from new.status
      and new.champion_club_id is not null
-     and new.competition_type in ('tournament','cup','league') then
+     and new.competition_type in ('tournament','cup','league')
+     and exists (select 1 from public.competition_special_player_rewards r where r.competition_id=new.id) then
     perform public.issue_competition_special_player_award(new.id);
   end if;
   return new;
