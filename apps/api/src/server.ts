@@ -106,6 +106,59 @@ async function requireAdmin(userId: string) {
   return { allowed: Boolean(data), role: data?.role ?? null };
 }
 
+app.get("/admin/special-player-tools", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const [packs, competitions, players] = await Promise.all([
+    supabase.from("special_player_packs").select("pack_key,title,price,active,updated_at").order("price"),
+    supabase.from("competitions").select("id,name,competition_type,season,status,champion_club_id").in("competition_type", ["league", "cup", "tournament"]).order("created_at", { ascending: false }).limit(100),
+    supabase.from("player_catalog").select("id,full_name,position,overall,special_tier").eq("player_class", "special").eq("active", true).order("overall", { ascending: false }).limit(200),
+  ]);
+  const error = packs.error ?? competitions.error ?? players.error;
+  if (error) {
+    request.log.error({ err: error }, "admin special player tools load failed");
+    return reply.code(500).send({ error: "special_player_tools_load_failed" });
+  }
+  return { packs: packs.data ?? [], competitions: competitions.data ?? [], players: players.data ?? [] };
+});
+
+app.put<{ Params: { key: string }; Body: { title?: string; price?: number; active?: boolean } }>("/admin/special-player-packs/:key", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const { key } = request.params;
+  const { title, price, active } = request.body ?? {};
+  if (!["epic", "legendary", "iconic"].includes(key) || typeof title !== "string" ||
+      title.trim().length < 2 || title.trim().length > 80 ||
+      !Number.isSafeInteger(price) || Number(price) < 1 ||
+      typeof active !== "boolean") {
+    return reply.code(400).send({ error: "special_pack_config_invalid" });
+  }
+  const { data, error } = await supabase.from("special_player_packs").upsert({
+    pack_key: key, title: title.trim(), price, active, updated_at: new Date().toISOString(),
+  }, { onConflict: "pack_key" }).select("pack_key,title,price,active,updated_at").single();
+  if (error) {
+    request.log.error({ err: error }, "special pack configuration failed");
+    return reply.code(500).send({ error: "special_pack_config_save_failed" });
+  }
+  return { pack: data };
+});
+
 app.get("/admin/overview", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
