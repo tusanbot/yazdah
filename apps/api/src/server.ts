@@ -975,6 +975,7 @@ app.post<{ Body: { action?: string; telegramUserId?: number; telegramChatId?: nu
     });
     if (error) {
       if (error.code === "22023") return reply.code(400).send({ error: "group_challenge_input_invalid" });
+      if (error.code === "23503") return reply.code(404).send({ error: "opponent_club_not_found" });
       request.log.error({ err: error }, "group challenge creation failed");
       return reply.code(500).send({ error: "group_challenge_create_failed" });
     }
@@ -1044,6 +1045,7 @@ app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?:
   if (error) {
     if (error.code === "P0002") return reply.code(404).send({ error: "telegram_group_not_linked" });
     if (error.code === "22023") return reply.code(400).send({ error: "group_challenge_input_invalid" });
+    if (error.code === "23503") return reply.code(404).send({ error: "opponent_club_not_found" });
     request.log.error({ err: error }, "group challenge creation failed");
     return reply.code(500).send({ error: "group_challenge_create_failed" });
   }
