@@ -203,6 +203,19 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     }
   }
 
+  async function revealHint() {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await post(`/groups/${encodeURIComponent(chatId)}/games/${detail.game.id}/hint`, {});
+      await openGame(detail.game.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "دریافت سرنخ ناموفق بود.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function claimMission(missionId: string) {
     setBusy(true);
     try {
@@ -334,9 +347,13 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               <h4>حدس بازیکن</h4>
               <p>با توجه به سرنخ‌ها نام بازیکن را حدس بزن.</p>
               <ul>{(detail.game.state.currentPlayer.clues ?? []).map((clue: string, index: number) => <li key={index}>{clue}</li>)}</ul>
+              <p>سرنخ {detail.game.state.currentPlayer.clueLevel} از {detail.game.state.currentPlayer.totalClues} · هرچه سرنخ بیشتری ببینی، امتیاز حدس کمتر می‌شود.</p>
               {detail.game.state.myAnswerSubmitted && <p>حدس شما ثبت شد؛ منتظر سایر شرکت‌کنندگان بمان.</p>}
+              <div className="choice-row">
+                <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || detail.game.state.currentPlayer.clueLevel >= detail.game.state.currentPlayer.totalClues} onClick={() => void revealHint()}>سرنخ بعدی</button>
+                <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: detail.game.state.currentPlayer.clueLevel })}>ثبت حدس</button>
+              </div>
               <label>نام بازیکن<input value={guess} onChange={(event) => setGuess(event.target.value)} maxLength={100} /></label>
-              <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: 1 })}>ثبت حدس</button>
             </div>
           )}
 
