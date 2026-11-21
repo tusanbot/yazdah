@@ -305,6 +305,58 @@ async function ownedClubId(userId: string): Promise<string | null> {
   return data?.club_id ?? null;
 }
 
+app.get("/clubs/me/special-player-entitlements", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("special_player_entitlements")
+    .select("id, source, reference_id, issued_at, claimed_at, claimed_player_id, catalog_player:player_catalog(id, full_name, position, overall, potential, special_tier)")
+    .eq("club_id", clubId).order("issued_at", { ascending: false }).limit(100);
+  if (error) {
+    request.log.error({ err: error }, "special player entitlements lookup failed");
+    return reply.code(500).send({ error: "special_entitlements_load_failed" });
+  }
+  return { entitlements: data ?? [] };
+});
+
+app.post<{ Body: { entitlementId?: string } }>("/clubs/me/special-player-entitlements/claim", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const entitlementId = request.body?.entitlementId;
+  if (typeof entitlementId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entitlementId)) {
+    return reply.code(400).send({ error: "special_entitlement_id_invalid" });
+  }
+  const { data, error } = await supabase.rpc("claim_special_player_entitlement", {
+    p_user_id: userId,
+    p_club_id: clubId,
+    p_entitlement_id: entitlementId,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "special_entitlement_claim_invalid" });
+    if (error.code === "42501") return reply.code(403).send({ error: "club_owner_required" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "special_entitlement_not_found" });
+    request.log.error({ err: error }, "special player entitlement claim failed");
+    return reply.code(500).send({ error: "special_entitlement_claim_failed" });
+  }
+  return { success: true, playerId: data };
+});
+
 app.get<{ Querystring: { class?: string } }>("/players/catalog", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
