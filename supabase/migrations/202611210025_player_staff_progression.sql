@@ -27,6 +27,7 @@ alter table public.club_staff
   add column if not exists generated_source text not null default 'manual'
     check (generated_source in ('random_generation','real_world','manual'));
 
+alter table public.club_staff drop constraint if exists club_staff_staff_role_check;
 alter table public.club_staff drop constraint if exists club_staff_role_expanded_check;
 alter table public.club_staff add constraint club_staff_role_expanded_check
   check (staff_role in ('head_coach','coach','technical','medical','fitness','transfer_director'));
