@@ -68,6 +68,36 @@ begin
 end;
 $$;
 
+create or replace function public.cancel_group_game(p_game_id uuid,p_actor_user_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
+declare g public.group_games%rowtype; p record; v_balance bigint; v_treasury bigint; v_refunded integer:=0;
+begin
+  select * into g from public.group_games where id=p_game_id for update;
+  if not found then raise exception 'group_game_not_found' using errcode='P0002'; end if;
+  if g.created_by_user_id<>p_actor_user_id then raise exception 'group_game_creator_required' using errcode='42501'; end if;
+  if g.status<>'open' then raise exception 'group_game_cannot_be_cancelled' using errcode='22023'; end if;
+
+  if g.entry_fee>0 then
+    for p in select user_id from public.group_game_participants where game_id=p_game_id loop
+      v_balance:=public.group_wallet_change(g.telegram_chat_id,p.user_id,g.entry_fee,'challenge_entry_refund',
+        p_game_id::text||':cancel-refund:'||p.user_id::text);
+      v_refunded:=v_refunded+1;
+    end loop;
+  elsif coalesce((g.settings->>'sponsoredPrize')::boolean,false) and g.prize_pool>0 then
+    update public.group_economies set treasury_balance=treasury_balance+g.prize_pool,updated_at=now()
+      where telegram_chat_id=g.telegram_chat_id returning treasury_balance into v_treasury;
+    insert into public.group_treasury_transactions(telegram_chat_id,amount,balance_after,reason,idempotency_key)
+      values(g.telegram_chat_id,g.prize_pool,v_treasury,'cancelled_group_game_prize_refund',p_game_id::text||':cancel-treasury-refund')
+      on conflict(telegram_chat_id,idempotency_key) do nothing;
+  end if;
+
+  update public.group_games set status='cancelled',deadline_at=null,completed_at=now(),
+    state=state||jsonb_build_object('cancelledBy',p_actor_user_id,'cancelledAt',now())
+    where id=p_game_id;
+  return jsonb_build_object('cancelled',true,'refundedParticipants',v_refunded);
+end;
+$;
+
 create or replace function public.settle_group_game_prize(p_game_id uuid,p_winners uuid[])
 returns void language plpgsql security definer set search_path=public,pg_temp as $$
 declare g public.group_games%rowtype; v_count integer; v_share bigint; v_remainder bigint; v_user uuid; v_index integer:=0;
@@ -94,5 +124,7 @@ alter table public.group_treasury_transactions enable row level security;
 revoke all on public.group_treasury_transactions from public,anon,authenticated;
 revoke all on function public.settle_group_game_prize(uuid,uuid[]) from public,anon,authenticated;
 grant execute on function public.settle_group_game_prize(uuid,uuid[]) to service_role;
+revoke all on function public.cancel_group_game(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.cancel_group_game(uuid,uuid) to service_role;
 revoke all on function public.create_group_game(bigint,uuid,text,bigint,integer,text) from public,anon,authenticated;
 grant execute on function public.create_group_game(bigint,uuid,text,bigint,integer,text) to service_role;
