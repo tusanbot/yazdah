@@ -18,6 +18,7 @@ type AuthResult = {
   accessToken: string;
   user: { id: string; first_name: string; username?: string | null };
 };
+type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubProfile = {
   id: string;
@@ -50,6 +51,14 @@ export default function HomePage() {
   const [prospectBirthDate, setProspectBirthDate] = useState("");
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffBusy, setStaffBusy] = useState(false);
+  const [staffStatus, setStaffStatus] = useState("");
+  const [staffName, setStaffName] = useState("");
+  const [staffRole, setStaffRole] = useState("coach");
+  const [staffSkill, setStaffSkill] = useState(50);
+  const [staffWage, setStaffWage] = useState(500);
+  const [staffContract, setStaffContract] = useState("");
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -99,6 +108,7 @@ export default function HomePage() {
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
       await loadAcademy(auth.accessToken);
+      await loadStaff(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
@@ -112,6 +122,57 @@ export default function HomePage() {
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "بارگذاری آکادمی ناموفق بود.");
     setProspects(body.prospects as AcademyProspect[]);
+  }
+
+  async function loadStaff(accessToken: string) {
+    const response = await fetch(`${API_URL}/clubs/me/staff`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری کادر فنی ناموفق بود.");
+    setStaff(body.staff as StaffMember[]);
+  }
+
+  async function hireStaff(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    setStaffBusy(true);
+    setStaffStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/staff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ fullName: staffName.trim(), staffRole, skill: staffSkill, weeklyWage: staffWage, contractUntil: staffContract, idempotencyKey: crypto.randomUUID() }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "insufficient_funds" ? "موجودی باشگاه برای هزینهٔ قرارداد کافی نیست." : body.error ?? "استخدام ناموفق بود.");
+      await loadStaff(session.accessToken);
+      setStaffName("");
+      setStaffStatus("عضو جدید به کادر فنی اضافه شد.");
+    } catch (error) {
+      setStaffStatus(error instanceof Error ? error.message : "خطای نامشخص در کادر فنی.");
+    } finally {
+      setStaffBusy(false);
+    }
+  }
+
+  async function releaseStaff(staffId: string) {
+    if (!session) return;
+    setStaffBusy(true);
+    setStaffStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/staff/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ staffId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "فسخ قرارداد ناموفق بود.");
+      await loadStaff(session.accessToken);
+      setStaffStatus("قرارداد عضو کادر فنی فسخ شد.");
+    } catch (error) {
+      setStaffStatus(error instanceof Error ? error.message : "خطای نامشخص در کادر فنی.");
+    } finally {
+      setStaffBusy(false);
+    }
   }
 
   async function recruitProspect(event: FormEvent<HTMLFormElement>) {
@@ -179,6 +240,26 @@ export default function HomePage() {
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
             <p>مرحله بعدی: تکمیل پروفایل، لوگو و ترکیب اولیه.</p>
+            <section className="academy" aria-labelledby="staff-heading">
+              <h2 id="staff-heading">مدیریت کادر فنی</h2>
+              <p className="muted">استخدام و فسخ قرارداد اعضای کادر. هزینهٔ اولیهٔ قرارداد برابر دو هفته حقوق است.</p>
+              {staff.length === 0 ? <p className="muted">کادر فنی هنوز عضوی ندارد.</p> : <div className="prospects">
+                {staff.map((member) => <article className="prospect" key={member.id}>
+                  <div><strong>{member.full_name}</strong><p>{({coach:"مربی",technical:"مدیر فنی",medical:"پزشک",fitness:"مربی بدنساز",transfer_director:"مدیر نقل‌وانتقالات"} as Record<string,string>)[member.staff_role] ?? member.staff_role} · مهارت {member.skill}</p><small>حقوق هفتگی: {Number(member.weekly_wage).toLocaleString("fa-IR")} · {member.released_at ? "فسخ‌شده" : `قرارداد تا ${member.contract_until ?? "نامشخص"}`}</small></div>
+                  {!member.released_at && <button type="button" disabled={staffBusy} onClick={() => releaseStaff(member.id)}>فسخ قرارداد</button>}
+                </article>)}
+              </div>}
+              <form className="recruit-form" onSubmit={hireStaff}>
+                <h3>استخدام عضو جدید</h3>
+                <label>نام<input required minLength={2} maxLength={80} value={staffName} onChange={(event) => setStaffName(event.target.value)} /></label>
+                <label>سمت<select value={staffRole} onChange={(event) => setStaffRole(event.target.value)}><option value="coach">مربی</option><option value="technical">مدیر فنی</option><option value="medical">پزشک</option><option value="fitness">مربی بدنساز</option><option value="transfer_director">مدیر نقل‌وانتقالات</option></select></label>
+                <label>مهارت<input required type="number" min={1} max={100} value={staffSkill} onChange={(event) => setStaffSkill(Number(event.target.value))} /></label>
+                <label>حقوق هفتگی (سکه)<input required type="number" min={0} max={100000000} value={staffWage} onChange={(event) => setStaffWage(Number(event.target.value))} /></label>
+                <label>پایان قرارداد<input required type="date" value={staffContract} onChange={(event) => setStaffContract(event.target.value)} /></label>
+                <button type="submit" disabled={staffBusy}>{staffBusy ? "در حال ثبت…" : "استخدام و ثبت قرارداد"}</button>
+              </form>
+              {staffStatus && <p className="notice" role="status">{staffStatus}</p>}
+            </section>
             <section className="academy" aria-labelledby="academy-heading">
               <h2 id="academy-heading">آکادمی باشگاه</h2>
               <p className="muted">استعدادهای جوان را بررسی کن و بازیکنان آماده را به تیم اصلی ارتقا بده.</p>
