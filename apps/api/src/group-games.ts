@@ -144,7 +144,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       request.log.error({ err: error }, "group game create failed");
       return reply.code(500).send({ error: "group_game_create_failed" });
     }
-    return reply.code(201).send({ gameId: data, gameType, entryFee, maxParticipants: gameType === "draft" || gameType === "penalty" || gameType === "cards" ? 2 : maxParticipants });
+    const { data: createdGame } = await supabase.from("group_games").select("prize_pool").eq("id", data).single();
+    return reply.code(201).send({ gameId: data, gameType, entryFee, prizePool: createdGame?.prize_pool ?? 0,
+      maxParticipants: gameType === "draft" || gameType === "penalty" || gameType === "cards" ? 2 : maxParticipants });
   });
 
   app.get<{ Params: { chatId: string } }>("/groups/:chatId/games", async (request, reply) => {
