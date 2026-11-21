@@ -65,6 +65,20 @@ async function payStaffDaily(job: Job) {
   if (stateError) throw new Error(stateError.message);
 }
 
+async function trainPlayersDaily(job: Job) {
+  const clubId = job.payload.club_id;
+  const stateDate = job.payload.state_date;
+  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(stateDate)) {
+    throw new Error("training_payload_invalid");
+  }
+  const { data, error } = await supabase.rpc("apply_daily_training", {
+    p_club_id: clubId,
+    p_state_date: stateDate,
+  });
+  if (error) throw new Error(error.message);
+  console.info(JSON.stringify({ event: "daily_training_applied", clubId, stateDate, playersImproved: data }));
+}
+
 async function process(job: Job) {
   switch (job.job_type) {
     case "match.resolve":
@@ -109,6 +123,13 @@ async function enqueueDueWork() {
       idempotency_key: `staff.payroll:${stateDate}:${club.id}`,
     }, { onConflict: "idempotency_key", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
+    const { error: trainingError } = await supabase.from("game_jobs").upsert({
+      job_type: "players.training",
+      payload: { club_id: club.id, state_date: stateDate },
+      run_at: `${stateDate}T00:05:00.000Z`,
+      idempotency_key: `players.training:${stateDate}:${club.id}`,
+    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
+    if (trainingError) throw new Error(trainingError.message);
   }
 }
 
