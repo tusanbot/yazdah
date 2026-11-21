@@ -850,6 +850,30 @@ app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?:
   return reply.code(201).send({ challengeId: data });
 });
 
+app.post<{ Body: { challengeId?: string; kickoffAt?: string } }>("/clubs/me/group-challenges/accept", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { challengeId, kickoffAt } = request.body ?? {};
+  if (typeof challengeId !== "string" || !/^[0-9a-f-]{36}$/i.test(challengeId) ||
+      typeof kickoffAt !== "string" || !Number.isFinite(Date.parse(kickoffAt)) || Date.parse(kickoffAt) <= Date.now()) {
+    return reply.code(400).send({ error: "group_challenge_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("accept_group_challenge", {
+    p_challenge_id: challengeId, p_opponent_club_id: clubId, p_kickoff_at: kickoffAt,
+  });
+  if (error) {
+    if (error.code === "P0002") return reply.code(404).send({ error: "challenge_not_found" });
+    if (error.code === "22023") return reply.code(409).send({ error: "challenge_not_available" });
+    request.log.error({ err: error }, "group challenge acceptance failed");
+    return reply.code(500).send({ error: "group_challenge_accept_failed" });
+  }
+  return { accepted: true, matchId: data };
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
