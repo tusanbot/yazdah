@@ -274,6 +274,26 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     },
   );
 
+  app.post<{ Params: { chatId: string; gameId: string } }>("/groups/:chatId/games/:gameId/cancel", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user } = await supabase.from("game_users").select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
+      return reply.code(403).send({ error: "telegram_group_membership_required" });
+    }
+    const { data, error } = await supabase.rpc("cancel_group_game", {
+      p_game_id: request.params.gameId, p_actor_user_id: userId,
+    });
+    if (error) {
+      const map: Record<string, number> = { P0002: 404, "22023": 409, "42501": 403 };
+      return reply.code(map[error.code] ?? 500).send({ error: error.message });
+    }
+    return data;
+  });
+
   app.post<{ Params: { chatId: string; gameId: string } }>("/groups/:chatId/games/:gameId/start", async (request, reply) => {
     if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
     const userId = readSession(request.headers.authorization);
