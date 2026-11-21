@@ -121,6 +121,10 @@ app.get("/admin/overview", async (request, reply) => {
     request.log.error({ err: failedQuery.error }, "admin overview query failed");
     return reply.code(500).send({ error: "admin_overview_failed" });
   }
+  const { data: failedNotifications, error: failedNotificationError } = await supabase.from("telegram_notification_outbox")
+    .select("id,match_id,telegram_user_id,attempts,last_error,created_at")
+    .eq("status", "failed").order("created_at", { ascending: false }).limit(20);
+  if (failedNotificationError) return reply.code(500).send({ error: "admin_notifications_load_failed" });
   const { data: recentAudit, error: auditError } = await supabase.from("admin_audit_log")
     .select("id,actor_user_id,action,target_type,target_id,details,created_at")
     .order("created_at", { ascending: false }).limit(20);
@@ -128,7 +132,7 @@ app.get("/admin/overview", async (request, reply) => {
   return { role: admin.role, stats: {
     users: users.count ?? 0, clubs: clubs.count ?? 0, matches: matches.count ?? 0,
     notificationsPending: pending.count ?? 0, notificationsFailed: failed.count ?? 0,
-  }, recentAudit: recentAudit ?? [] };
+  }, recentAudit: recentAudit ?? [], failedNotifications: failedNotifications ?? [] };
 });
 
 app.post<{ Params: { id: string } }>("/admin/notifications/:id/retry", async (request, reply) => {
