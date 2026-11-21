@@ -61,10 +61,12 @@ function safeGameState(game: Record<string, any>, userId: string) {
     delete state.answers;
   } else if (game.game_type === "cards") {
     state.myHand = state.hands?.[userId] ?? [];
+    state.myUsedCardIds = state.used?.[userId] ?? [];
     state.mySelectionSubmitted = Boolean(state.selected?.[userId]);
     delete state.hands;
     delete state.deck;
     delete state.selected;
+    delete state.used;
   } else if (game.game_type === "penalty") {
     state.myActionSubmitted = Boolean(state.actions?.[userId]);
     const first = state.users?.[0] === userId;
@@ -230,7 +232,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       game: { ...game, state: safeGameState(game as Record<string, any>, userId) },
       participants: (participants ?? []).map((p) => ({
         ...p,
-        picks: game.game_type === "draft" || game.game_type === "cards" ? p.picks : [],
+        picks: game.game_type === "draft" || (game.game_type === "cards" && game.status === "completed") ? p.picks : [],
         isMe: p.user_id === userId,
       })),
       isCreator: game.created_by_user_id === userId,
