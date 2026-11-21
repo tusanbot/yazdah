@@ -18,6 +18,7 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const sessionSecret = process.env.SESSION_SECRET;
+const botInternalSecret = process.env.BOT_INTERNAL_SECRET;
 
 const supabase = supabaseUrl && serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey, {
@@ -50,6 +51,46 @@ function readSession(header?: string): string | null {
     return claims.sub;
   } catch { return null; }
 }
+
+app.post<{ Body: { telegramUserId?: number; telegramChatId?: number; title?: string } }>("/internal/telegram-groups/link", async (request, reply) => {
+  if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "group_linking_not_configured" });
+  const supplied = request.headers["x-bot-internal-secret"];
+  if (typeof supplied !== "string") return reply.code(401).send({ error: "bot_auth_required" });
+  const expected = Buffer.from(botInternalSecret);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return reply.code(401).send({ error: "bot_auth_invalid" });
+  }
+  const { telegramUserId, telegramChatId, title } = request.body ?? {};
+  if (!Number.isSafeInteger(telegramUserId) || !Number.isSafeInteger(telegramChatId) ||
+      typeof title !== "string" || title.trim().length < 1 || title.trim().length > 200) {
+    return reply.code(400).send({ error: "telegram_group_input_invalid" });
+  }
+  const { data: user, error: userError } = await supabase.from("game_users")
+    .select("id").eq("telegram_user_id", telegramUserId).maybeSingle();
+  if (userError) {
+    request.log.error({ err: userError }, "telegram group linker lookup failed");
+    return reply.code(500).send({ error: "group_linker_lookup_failed" });
+  }
+  if (!user) return reply.code(404).send({ error: "telegram_user_not_registered" });
+  const { data: membership, error: membershipError } = await supabase.from("club_memberships")
+    .select("club_id").eq("user_id", user.id).eq("role", "owner").maybeSingle();
+  if (membershipError) {
+    request.log.error({ err: membershipError }, "telegram group owner lookup failed");
+    return reply.code(500).send({ error: "group_linker_club_lookup_failed" });
+  }
+  if (!membership) return reply.code(409).send({ error: "club_required_before_group_link" });
+  const { error } = await supabase.from("telegram_game_groups").upsert({
+    telegram_chat_id: telegramChatId,
+    title: title.trim(),
+    linked_by_user_id: user.id,
+  }, { onConflict: "telegram_chat_id" });
+  if (error) {
+    request.log.error({ err: error }, "telegram group link failed");
+    return reply.code(500).send({ error: "telegram_group_link_failed" });
+  }
+  return { linked: true, telegramChatId };
+});
 
 app.get("/health", async () => ({
   status: "ok",
