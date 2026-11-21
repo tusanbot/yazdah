@@ -429,6 +429,48 @@ app.get("/clubs/me/matches", async (request, reply) => {
   return { matches: data ?? [] };
 });
 
+app.post<{ Params: { matchId: string } }>("/clubs/me/matches/:matchId/resolve", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  const matchId = request.params.matchId;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(matchId)) {
+    return reply.code(400).send({ error: "match_id_invalid" });
+  }
+
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+
+  const { data: match, error: matchError } = await supabase.from("matches")
+    .select("id, home_club_id, away_club_id, kickoff_at, status")
+    .eq("id", matchId).maybeSingle();
+  if (matchError) {
+    request.log.error({ err: matchError }, "match lookup failed");
+    return reply.code(500).send({ error: "match_lookup_failed" });
+  }
+  if (!match) return reply.code(404).send({ error: "match_not_found" });
+  if (match.home_club_id !== clubId && match.away_club_id !== clubId) {
+    return reply.code(403).send({ error: "match_not_owned" });
+  }
+  if (new Date(match.kickoff_at).getTime() > Date.now()) {
+    return reply.code(409).send({ error: "match_not_started" });
+  }
+
+  const { data, error } = await supabase.rpc("resolve_match", { p_match_id: matchId });
+  if (error) {
+    if (error.message.includes("match_not_started")) return reply.code(409).send({ error: "match_not_started" });
+    if (error.message.includes("match_not_resolvable")) return reply.code(409).send({ error: "match_not_resolvable" });
+    request.log.error({ err: error }, "match resolution failed");
+    return reply.code(500).send({ error: "match_resolution_failed" });
+  }
+  return { match: data };
+});
+
 app.get("/competitions", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
