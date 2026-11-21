@@ -42,7 +42,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if p_club_id is null or p_plan not in ('balanced','development','recovery') then
+  if p_club_id is null or p_plan is null or p_plan not in ('balanced','development','recovery') then
     raise exception 'training_plan_invalid' using errcode = '22023';
   end if;
   insert into public.club_training_preferences(club_id, plan, updated_at)
