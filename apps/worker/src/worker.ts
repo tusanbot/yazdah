@@ -69,7 +69,7 @@ async function trainPlayersDaily(job: Job) {
   const clubId = job.payload.club_id;
   const stateDate = job.payload.state_date;
   if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(stateDate)) {
-    throw new Error("training_payload_invalid");
+  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stateDate)) {
   }
   const { data, error } = await supabase.rpc("apply_daily_training", {
     p_club_id: clubId,
@@ -86,6 +86,9 @@ async function process(job: Job) {
       return;
     case "staff.payroll":
       await payStaffDaily(job);
+      return;
+    case "players.training":
+      await trainPlayersDaily(job);
       return;
     default:
       throw new Error(`unsupported_job_type:${job.job_type}`);
@@ -156,8 +159,13 @@ async function pollOnce() {
 process.on("SIGINT", () => { stopping = true; });
 process.on("SIGTERM", () => { stopping = true; });
 
+let lastScheduledAt = 0;
 while (!stopping) {
   try {
+    if (Date.now() - lastScheduledAt >= 60_000) {
+      await enqueueDueWork();
+      lastScheduledAt = Date.now();
+    }
     const found = await pollOnce();
     if (!found) await new Promise((resolve) => setTimeout(resolve, pollMs));
   } catch (error) {
