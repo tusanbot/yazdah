@@ -56,7 +56,7 @@ export default function HomePage() {
   const [prospectBirthDate, setProspectBirthDate] = useState("");
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
-  const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [players, setPlayers] = useState<SquadPlayer[]>([]);\n  const [trainingPlan, setTrainingPlan] = useState("balanced");\n  const [trainingStatus, setTrainingStatus] = useState("");\n  const [contractStatus, setContractStatus] = useState("");
   const [matches, setMatches] = useState<ClubMatch[]>([]);
   const [matchBusyId, setMatchBusyId] = useState("");
   const [matchStatus, setMatchStatus] = useState("");
@@ -126,7 +126,7 @@ export default function HomePage() {
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
-      await loadPlayers(auth.accessToken);
+      await loadPlayers(auth.accessToken);\n      await loadTrainingPlan(auth.accessToken);
       await loadMatches(auth.accessToken);
       await loadMarket(auth.accessToken);
       await loadOwnListings(auth.accessToken);
@@ -182,6 +182,46 @@ export default function HomePage() {
     } finally {
       setMatchBusyId("");
     }
+  }
+
+  async function loadTrainingPlan(accessToken: string) {
+    const response = await fetch(`${API_URL}/clubs/me/training-plan`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری برنامه تمرین ناموفق بود.");
+    setTrainingPlan(body.plan as string);
+  }
+
+  async function saveTrainingPlan() {
+    if (!session) return;
+    setTrainingStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/training-plan`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ plan: trainingPlan }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ثبت برنامه تمرین ناموفق بود.");
+      setTrainingStatus("برنامه تمرین ذخیره شد و از چرخه روزانه بعدی اعمال می‌شود.");
+    } catch (error) { setTrainingStatus(error instanceof Error ? error.message : "ثبت برنامه تمرین ناموفق بود."); }
+  }
+
+  async function renewPlayerContract(event: FormEvent<HTMLFormElement>, playerId: string) {
+    event.preventDefault();
+    if (!session) return;
+    setContractStatus("");
+    const form = new FormData(event.currentTarget);
+    const contractUntil = String(form.get("contractUntil") ?? "");
+    const weeklyWage = Number(form.get("weeklyWage"));
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/players/renew-contract`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ playerId, contractUntil, weeklyWage }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "تمدید قرارداد ناموفق بود.");
+      await loadPlayers(session.accessToken);
+      setContractStatus("قرارداد بازیکن به‌روزرسانی شد.");
+    } catch (error) { setContractStatus(error instanceof Error ? error.message : "تمدید قرارداد ناموفق بود."); }
   }
 
   async function loadPlayers(accessToken: string) {
@@ -404,13 +444,28 @@ export default function HomePage() {
             <section className="academy" aria-labelledby="squad-heading">
               <h2 id="squad-heading">فهرست بازیکنان</h2>
               <p className="muted">بازیکنان تحت قرارداد باشگاه؛ بازیکنانی که از آکادمی ارتقا می‌یابند در این فهرست دیده می‌شوند.</p>
+              <div className="training-plan">
+                <h3>برنامه تمرین روزانه</h3>
+                <label>برنامه<select value={trainingPlan} onChange={(event) => setTrainingPlan(event.target.value)}>
+                  <option value="balanced">متعادل: پیشرفت +۱، آمادگی −۲</option>
+                  <option value="development">پیشرفت: رشد +۱، آمادگی −۴</option>
+                  <option value="recovery">بازیابی: آمادگی +۵، بدون رشد</option>
+                </select></label>
+                <button type="button" onClick={saveTrainingPlan}>ذخیره برنامه</button>
+                {trainingStatus && <p className="notice" role="status">{trainingStatus}</p>}
+              </div>
               {players.length === 0 ? <p className="muted">هنوز بازیکنی در تیم اصلی ثبت نشده است. از آکادمی بازیکن جذب و ارتقا بده.</p> : <div className="prospects">
                 {players.map((player) => <article className="prospect" key={player.id}>
-                  <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p><small>آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"}</small></div>
+                  <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p><small>آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"} · قرارداد تا {player.contract_until ?? "نامشخص"} · دستمزد هفتگی {Number(player.weekly_wage).toLocaleString("fa-IR")}</small>
+                    <form className="contract-form" onSubmit={(event) => renewPlayerContract(event, player.id)}>
+                      <label>تمدید تا<input required name="contractUntil" type="date" defaultValue={player.contract_until ?? ""} /></label>
+                      <label>حقوق هفتگی<input required name="weeklyWage" type="number" min={0} max={100000000} defaultValue={player.weekly_wage} /></label>
+                      <button type="submit">ثبت قرارداد</button>
+                    </form></div>
                   <label><input type="checkbox" checked={selectedPlayerIds.includes(player.id)} onChange={(event) => setSelectedPlayerIds((ids) => event.target.checked ? [...ids, player.id] : ids.filter((id) => id !== player.id))} /> انتخاب برای ترکیب</label>
                 </article>)}
               </div>
-              <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
+              {contractStatus && <p className="notice" role="status">{contractStatus}</p>}\n              <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
               <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
               {lineupStatus && <p className="notice" role="status">{lineupStatus}</p>}
             </section>
