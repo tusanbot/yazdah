@@ -48,7 +48,9 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState<AuthResult | null>(null);
   const [clubId, setClubId] = useState("");
-  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);\n  const [tactics, setTactics] = useState({ formation: "4-3-3", mentality: "balanced", tempo: "normal", pressing: "standard" });\n  const [tacticsStatus, setTacticsStatus] = useState("");
+  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);
+  const [tactics, setTactics] = useState({ formation: "4-3-3", mentality: "balanced", tempo: "normal", pressing: "standard" });
+  const [tacticsStatus, setTacticsStatus] = useState("");
   const [prospects, setProspects] = useState<AcademyProspect[]>([]);
   const [academyBusy, setAcademyBusy] = useState(false);
   const [academyStatus, setAcademyStatus] = useState("");
@@ -128,7 +130,8 @@ export default function HomePage() {
       });
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
-      setClubProfile(profileBody.club as ClubProfile);\n      setTactics(profileBody.club.tactics);
+      setClubProfile(profileBody.club as ClubProfile);
+      setTactics(profileBody.club.tactics);
       await loadPlayers(auth.accessToken);
       await loadTrainingPlan(auth.accessToken);
       await loadMatches(auth.accessToken);
