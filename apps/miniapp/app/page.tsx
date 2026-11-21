@@ -269,11 +269,16 @@ export default function HomePage() {
     event.preventDefault();
     if (!session) return;
     const chatId = Number(groupChatId);
-    const kickoffAt = new Date(challengeKickoff).toISOString();
-    if (!Number.isSafeInteger(chatId) || !opponentClubId.trim()) {
-      setChallengeStatus("شناسه گروه و شناسه باشگاه حریف را بررسی کن.");
+    if (!Number.isSafeInteger(chatId) || !opponentClubId.trim() || !challengeKickoff) {
+      setChallengeStatus("شناسه گروه، شناسه باشگاه حریف و زمان مسابقه را بررسی کن.");
       return;
     }
+    const kickoffDate = new Date(challengeKickoff);
+    if (!Number.isFinite(kickoffDate.getTime()) || kickoffDate.getTime() <= Date.now()) {
+      setChallengeStatus("زمان شروع مسابقه باید معتبر و در آینده باشد.");
+      return;
+    }
+    const kickoffAt = kickoffDate.toISOString();
     setChallengeBusy(true); setChallengeStatus("");
     try {
       const response = await fetch(`${API_URL}/clubs/me/group-challenges`, {
