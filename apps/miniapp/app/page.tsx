@@ -20,6 +20,7 @@ type AuthResult = {
 };
 type MarketListing = { id: string; asking_price: number; listed_at: string; player: { id: string; full_name: string; position: string; overall: number; potential: number; nationality_code: string | null }; seller: { id: string; name: string; slug: string } };
 type OwnListing = { id: string; player_id: string; asking_price: number; status: string };
+type ClubMatch = { id: string; competition_id: string | null; home_club_id: string; away_club_id: string; kickoff_at: string; status: string; home_score: number | null; away_score: number | null; competition: { name: string; competition_type: string; season: number } | null };
 type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
@@ -55,6 +56,9 @@ export default function HomePage() {
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [matches, setMatches] = useState<ClubMatch[]>([]);
+  const [matchBusyId, setMatchBusyId] = useState("");
+  const [matchStatus, setMatchStatus] = useState("");
   const [marketListings, setMarketListings] = useState<MarketListing[]>([]);
   const [ownListings, setOwnListings] = useState<OwnListing[]>([]);
   const [marketPrices, setMarketPrices] = useState<Record<string, string>>({});
@@ -120,6 +124,7 @@ export default function HomePage() {
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
       await loadPlayers(auth.accessToken);
+      await loadMatches(auth.accessToken);
       await loadMarket(auth.accessToken);
       await loadOwnListings(auth.accessToken);
       await loadAcademy(auth.accessToken);
@@ -129,6 +134,33 @@ export default function HomePage() {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadMatches(accessToken: string) {
+    const response = await fetch(`${API_URL}/clubs/me/matches`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری مسابقات ناموفق بود.");
+    setMatches(body.matches as ClubMatch[]);
+  }
+
+  async function resolveMatch(matchId: string) {
+    if (!session) return;
+    setMatchBusyId(matchId);
+    setMatchStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/matches/${matchId}/resolve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "match_not_started" ? "زمان شروع مسابقه نرسیده است." : body.error ?? "ثبت نتیجه ناموفق بود.");
+      await loadMatches(session.accessToken);
+      setMatchStatus("نتیجهٔ مسابقه ثبت شد.");
+    } catch (error) {
+      setMatchStatus(error instanceof Error ? error.message : "خطای نامشخص در مسابقات.");
+    } finally {
+      setMatchBusyId("");
     }
   }
 
@@ -361,6 +393,23 @@ export default function HomePage() {
               <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
               <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
               {lineupStatus && <p className="notice" role="status">{lineupStatus}</p>}
+            </section>
+            <section className="academy" aria-labelledby="matches-heading">
+              <h2 id="matches-heading">مسابقات باشگاه</h2>
+              <p className="muted">برنامه و نتایج مسابقات باشگاه. نتیجه فقط پس از زمان شروع و در سرور ثبت می‌شود.</p>
+              {matches.length === 0 ? <p className="muted">هنوز مسابقه‌ای برای باشگاه برنامه‌ریزی نشده است.</p> : <div className="prospects">
+                {matches.map((match) => {
+                  const home = match.home_club_id === clubId;
+                  const opponentId = home ? match.away_club_id : match.home_club_id;
+                  const result = match.home_score === null || match.away_score === null ? "در انتظار برگزاری" : home ? `${match.home_score} - ${match.away_score}` : `${match.away_score} - ${match.home_score}`;
+                  const canResolve = match.status === "scheduled" && new Date(match.kickoff_at).getTime() <= Date.now();
+                  return <article className="prospect" key={match.id}>
+                    <div><strong>{match.competition?.name ?? "مسابقه دوستانه"}</strong><p>{home ? "میزبان" : "میهمان"} · حریف: {opponentId.slice(0, 8)}</p><small>{new Date(match.kickoff_at).toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tehran" })} · {result}</small></div>
+                    {canResolve && <button type="button" disabled={matchBusyId === match.id} onClick={() => resolveMatch(match.id)}>{matchBusyId === match.id ? "در حال ثبت…" : "ثبت نتیجه"}</button>}
+                  </article>;
+                })}
+              </div>}
+              {matchStatus && <p className="notice" role="status">{matchStatus}</p>}
             </section>
             <section className="academy" aria-labelledby="market-heading">
               <h2 id="market-heading">بازار نقل‌وانتقالات</h2>
