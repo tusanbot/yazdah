@@ -103,7 +103,8 @@ begin
     v_used:=coalesce(g.state->'used','[]'::jsonb);
     if p_auto then
       select value into v_card from jsonb_array_elements(v_hand)
-        where not (v_used ? (value->>'id')) order by (value->>'overall')::int desc limit 1;
+        where not (v_used ? (value->>'id'))
+        order by ((value->>'overall')::int + case when value->>'rarity'='mythic' then 5 else 0 end) desc limit 1;
     else
       select value into v_card from jsonb_array_elements(v_hand)
         where value->>'id'=p_action->>'cardId' and not (v_used ? (value->>'id')) limit 1;
@@ -147,7 +148,7 @@ begin
     if (select count(*) from jsonb_object_keys(v_actions))=2 then
       v_shooter:=case when mod(v_round,2)=1 then v_users[1] else v_users[2] end;
       v_keeper:=case when v_shooter=v_users[1] then v_users[2] else v_users[1] end;
-      if v_actions->>v_shooter::text <> v_actions->>v_keeper::text then
+      if (v_actions ->> (v_shooter::text)) <> (v_actions ->> (v_keeper::text)) then
         update public.group_game_participants set score=score+1 where game_id=p_game_id and user_id=v_shooter;
       end if;
       if v_round>=10 then
