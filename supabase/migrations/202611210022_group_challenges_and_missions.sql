@@ -181,6 +181,7 @@ insert into public.group_mission_definitions(id,title,description,cadence,scope,
 ('group-activity','گروه پرجنب‌وجوش','اعضای گروه در مجموع ۲۰ چالش را تمام کنند','collective','group','game_completed',20,5000),
 ('group-united','اتحاد گروه','حداقل ۳۰ بار اعضا در چالش‌ها شرکت کنند','collective','group','game_joined',30,7000)
 on conflict(id) do nothing;
+update public.group_mission_definitions set event_type='group_game_completed' where id='group-activity';
 
 create or replace function public.ensure_group_economy()
 returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
