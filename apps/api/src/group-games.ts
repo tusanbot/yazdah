@@ -163,9 +163,14 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       request.log.error({ err: failed.error }, "group game overview failed");
       return reply.code(500).send({ error: "group_games_load_failed" });
     }
-    const { data: participantRows, error: participantError } = await supabase.from("group_game_participants").select("game_id,user_id,score,status,formation")
-      .in("game_id", (games.data ?? []).map((item) => item.id));
-    if (participantError) return reply.code(500).send({ error: "group_game_participants_load_failed" });
+    const gameIds = (games.data ?? []).map((item) => item.id);
+    let participantRows: Array<{ game_id: string; user_id: string; score: number; status: string; formation: string }> = [];
+    if (gameIds.length > 0) {
+      const { data, error } = await supabase.from("group_game_participants").select("game_id,user_id,score,status,formation")
+        .in("game_id", gameIds);
+      if (error) return reply.code(500).send({ error: "group_game_participants_load_failed" });
+      participantRows = data ?? [];
+    }
     const participantMap = new Map<string, typeof participantRows>();
     for (const row of participantRows ?? []) {
       const current = participantMap.get(row.game_id) ?? [];
