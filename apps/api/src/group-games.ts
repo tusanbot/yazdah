@@ -268,7 +268,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       participants: (participants ?? []).map((p) => ({
         ...p,
         score: game.game_type === "cards" && game.status === "active" && p.user_id !== userId ? 0 : p.score,
-        picks: game.game_type === "draft" || (game.game_type === "cards" && game.status === "completed") ? p.picks : [],
+        picks: game.status === "completed" && (game.game_type === "draft" || game.game_type === "cards") ? p.picks : [],
         isMe: p.user_id === userId,
       })),
       isCreator: game.created_by_user_id === userId,
