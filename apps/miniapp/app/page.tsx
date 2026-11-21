@@ -90,6 +90,7 @@ export default function HomePage() {
   const [staffStatus, setStaffStatus] = useState("");
   const [staffName, setStaffName] = useState("");
   const [staffRole, setStaffRole] = useState("coach");
+  const [staffTier, setStaffTier] = useState("ordinary");
   const [staffSkill, setStaffSkill] = useState(50);
   const [staffWage, setStaffWage] = useState(500);
   const [staffContract, setStaffContract] = useState("");
@@ -530,7 +531,7 @@ export default function HomePage() {
       const response = await fetch(`${API_URL}/clubs/me/staff`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ fullName: staffName.trim(), staffRole, skill: staffSkill, weeklyWage: staffWage, contractUntil: staffContract, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ fullName: staffName.trim(), staffRole, staffTier, skill: staffSkill, weeklyWage: staffWage, contractUntil: staffContract, idempotencyKey: crypto.randomUUID() }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error === "insufficient_funds" ? "موجودی باشگاه برای هزینهٔ قرارداد کافی نیست." : body.error ?? "استخدام ناموفق بود.");
@@ -800,6 +801,7 @@ export default function HomePage() {
                 <h3>استخدام عضو جدید</h3>
                 <label>نام<input required minLength={2} maxLength={80} value={staffName} onChange={(event) => setStaffName(event.target.value)} /></label>
                 <label>سمت<select value={staffRole} onChange={(event) => setStaffRole(event.target.value)}><option value="coach">مربی</option><option value="technical">مدیر فنی</option><option value="medical">پزشک</option><option value="fitness">مربی بدنساز</option><option value="transfer_director">مدیر نقل‌وانتقالات</option></select></label>
+                <label>سطح<select value={staffTier} onChange={(event) => setStaffTier(event.target.value)}><option value="ordinary">معمولی</option><option value="professional">حرفه‌ای</option><option value="legendary">افسانه‌ای</option></select></label>
                 <label>مهارت<input required type="number" min={1} max={100} value={staffSkill} onChange={(event) => setStaffSkill(Number(event.target.value))} /></label>
                 <label>حقوق هفتگی (سکه)<input required type="number" min={0} max={100000000} value={staffWage} onChange={(event) => setStaffWage(Number(event.target.value))} /></label>
                 <label>پایان قرارداد<input required type="date" value={staffContract} onChange={(event) => setStaffContract(event.target.value)} /></label>
