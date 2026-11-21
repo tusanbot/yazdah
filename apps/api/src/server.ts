@@ -1,9 +1,19 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { verifyTelegramInitData } from "./telegram-auth.js";
 
 const app = Fastify({ logger: true });
+const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
+await app.register(cors, {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("origin_not_allowed"), false);
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+});
 const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
