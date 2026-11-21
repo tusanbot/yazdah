@@ -327,6 +327,55 @@ app.get("/competitions", async (request, reply) => {
   return { competitions: data ?? [] };
 });
 
+app.get("/clubs/me/academy", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("academy_players")
+    .select("id, full_name, birth_date, position, potential, development, status, created_at")
+    .eq("club_id", clubId).order("created_at", { ascending: true }).limit(100);
+  if (error) {
+    request.log.error({ err: error }, "academy lookup failed");
+    return reply.code(500).send({ error: "academy_load_failed" });
+  }
+  return { prospects: data ?? [] };
+});
+
+app.post<{ Body: { academyPlayerId?: string } }>("/clubs/me/academy/promote", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const academyPlayerId = request.body?.academyPlayerId;
+  if (typeof academyPlayerId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(academyPlayerId)) {
+    return reply.code(400).send({ error: "academy_player_id_invalid" });
+  }
+  const { data, error } = await supabase.rpc("promote_academy_player", {
+    p_club_id: clubId,
+    p_academy_player_id: academyPlayerId,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "academy_prospect_unavailable" });
+    request.log.error({ err: error }, "academy promotion failed");
+    return reply.code(500).send({ error: "academy_promotion_failed" });
+  }
+  return reply.code(201).send({ playerId: data });
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
