@@ -17,6 +17,7 @@ type GroupGame = {
   participants: { user_id: string; score: number; status: string; formation: string }[];
   isCreator: boolean;
 };
+type WalletTransaction = { id: string; amount: number; balance_after: number; reason: string; created_at: string };
 type Mission = {
   id: string;
   title: string;
@@ -64,6 +65,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
   const [games, setGames] = useState<GroupGame[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [formation, setFormation] = useState("1-2-1");
   const [guess, setGuess] = useState("");
@@ -81,16 +83,20 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     setBusy(true);
     setStatus("");
     try {
-      const [gamesResponse, missionsResponse] = await Promise.all([
+      const [gamesResponse, missionsResponse, walletResponse] = await Promise.all([
         fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/games`, { headers }),
         fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/missions`, { headers }),
+        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/wallet`, { headers }),
       ]);
       const gamesBody = await gamesResponse.json();
       const missionsBody = await missionsResponse.json();
+      const walletBody = await walletResponse.json();
       if (!gamesResponse.ok) throw new Error(gamesBody.error ?? "بارگذاری چالش‌های گروه ناموفق بود.");
       if (!missionsResponse.ok) throw new Error(missionsBody.error ?? "بارگذاری مأموریت‌های گروه ناموفق بود.");
+      if (!walletResponse.ok) throw new Error(walletBody.error ?? "بارگذاری کیف پول گروه ناموفق بود.");
       setGames(gamesBody.games ?? []);
-      setWalletBalance(Number(gamesBody.walletBalance ?? missionsBody.walletBalance ?? 0));
+      setWalletBalance(Number(walletBody.balance ?? gamesBody.walletBalance ?? missionsBody.walletBalance ?? 0));
+      setWalletTransactions(walletBody.transactions ?? []);
       setMissions(missionsBody.missions ?? []);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "ارتباط با گروه برقرار نشد.");
@@ -383,6 +389,17 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             </div>
           )}
 
+          <h3>گردش کیف پول گروه</h3>
+          {walletTransactions.length === 0 ? <p className="muted">هنوز تراکنشی ثبت نشده است.</p> : (
+            <div className="mission-list">
+              {walletTransactions.slice(0, 8).map((transaction) => (
+                <article className="wallet-row" key={transaction.id}>
+                  <span>{transaction.reason === "challenge_entry" ? "ورودی چالش" : transaction.reason === "challenge_prize" ? "جایزه چالش" : "پاداش مأموریت"}</span>
+                  <strong className={transaction.amount >= 0 ? "positive" : "negative"}>{transaction.amount > 0 ? "+" : ""}{Number(transaction.amount).toLocaleString("fa-IR")} سکه</strong>
+                </article>
+              ))}
+            </div>
+          )}
           <h3>مأموریت‌های گروه</h3>
           {missions.length === 0 ? <p className="muted">مأموریتی برای این گروه تعریف نشده است.</p> : (
             <div className="mission-list">
@@ -412,6 +429,8 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
         p { color:#aebbd0; line-height:1.8; margin:6px 0 12px; }
         .wallet { background:#173c34; padding:10px 12px; border-radius:12px; display:grid; gap:4px; min-width:120px; }
         .wallet small,.game-row small,.mission-row small,.participant span,.participant small { color:#aebbd0; }
+        .wallet-row { display:flex; justify-content:space-between; padding:9px 12px; border:1px solid #34465f; border-radius:10px; background:#111f31; }
+        .positive { color:#6fdaa4; } .negative { color:#ff9a9a; }
         .group-connect { display:flex; gap:10px; align-items:end; margin:14px 0; }
         label { display:grid; gap:6px; flex:1; font-size:13px; }
         input,select { width:100%; padding:11px; border-radius:10px; border:1px solid #34465f; background:#0b1422; color:white; font:inherit; }
