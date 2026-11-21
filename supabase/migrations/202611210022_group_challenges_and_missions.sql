@@ -400,8 +400,10 @@ begin
   v_round:=(g.state->>'round')::int;
   v_key:=case when v_round=1 then 'goalkeeper' else null end;
   if p_auto then
-    select value into v_card from jsonb_array_elements(g.state->'pools'->case when v_round=1 then 'goalkeeper' else 'defender' end)
-    where not (g.state->'used' ? (value->>'id')) order by random() limit 1;
+    select value into v_card from jsonb_array_elements(
+      case when v_round=1 then g.state->'pools'->'goalkeeper'
+      else (g.state->'pools'->'defender')||(g.state->'pools'->'midfielder')||(g.state->'pools'->'attacker') end
+    ) where not (g.state->'used' ? (value->>'id')) order by random() limit 1;
   else
     select value into v_card from jsonb_array_elements(
       case when v_round=1 then g.state->'pools'->'goalkeeper'
@@ -413,7 +415,10 @@ begin
   if v_round>1 and v_card->>'position_group'='goalkeeper' then raise exception 'draft_field_player_required' using errcode='22023'; end if;
   v_picks:=coalesce(g.state->'picks'->(p_user_id::text),'[]'::jsonb)||jsonb_build_array(v_card);
   update public.group_game_participants set picks=v_picks where game_id=p_game_id and user_id=p_user_id;
-  update public.group_games set state=jsonb_set(jsonb_set(state,'{picks,'||p_user_id::text||'}',v_picks,true),'{used}',coalesce(state->'used','[]'::jsonb)||to_jsonb(v_card->>'id'),true) where id=p_game_id;
+  update public.group_games set state=jsonb_set(
+    jsonb_set(state,array['picks',p_user_id::text],v_picks,true),
+    '{used}',coalesce(state->'used','[]'::jsonb)||to_jsonb(v_card->>'id'),true
+  ) where id=p_game_id;
   select * into g from public.group_games where id=p_game_id;
   if (select count(*) from public.group_game_participants where game_id=p_game_id and jsonb_array_length(picks)>=v_round) = 2 then
     if v_round=5 then
@@ -436,8 +441,10 @@ begin
     end if;
     v_starter:=case when (g.state->>'roundStarter')::uuid=v_users[1] then v_users[2] else v_users[1] end;
     v_round:=v_round+1;
-    update public.group_games set state=jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round),true),'{roundStarter}',to_jsonb(v_starter),true),
-      state=jsonb_set(state,'{currentTurn}',to_jsonb(v_starter),true),current_round=v_round,deadline_at=now()+interval '30 seconds'
+    update public.group_games set state=jsonb_set(
+      jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round),true),'{roundStarter}',to_jsonb(v_starter),true),
+      '{currentTurn}',to_jsonb(v_starter),true
+    ),current_round=v_round,deadline_at=now()+interval '30 seconds'
     where id=p_game_id;
   else
     select user_id into v_next from public.group_game_participants where game_id=p_game_id and user_id<>p_user_id;
@@ -463,9 +470,18 @@ begin
 end;
 $$;
 
+create table if not exists public.group_mission_claims (
+  telegram_chat_id bigint not null references public.telegram_game_groups(telegram_chat_id) on delete cascade,
+  mission_id text not null references public.group_mission_definitions(id) on delete cascade,
+  period_key text not null,
+  user_id uuid not null references public.game_users(id) on delete cascade,
+  claimed_at timestamptz not null default now(),
+  primary key(telegram_chat_id,mission_id,period_key,user_id)
+);
+
 create or replace function public.claim_group_mission(
   p_chat_id bigint,p_user_id uuid,p_mission_id text
-) returns bigint language plpgsql security definer set search_path=public,pg_temp as $$
+) returns bigint language plpgsql security definer set search_path=public,pg_temp as $
 declare m public.group_mission_definitions%rowtype; v_period text; v_subject text; v_progress public.group_mission_progress%rowtype; v_balance bigint;
 begin
   select * into m from public.group_mission_definitions where id=p_mission_id and active;
@@ -479,13 +495,19 @@ begin
   select * into v_progress from public.group_mission_progress
     where telegram_chat_id=p_chat_id and mission_id=p_mission_id and period_key=v_period and subject_key=v_subject for update;
   if not found or v_progress.progress<m.target_count then raise exception 'group_mission_incomplete' using errcode='22023'; end if;
-  if v_progress.claimed_at is not null then raise exception 'group_mission_claimed' using errcode='23505'; end if;
-  update public.group_mission_progress set claimed_at=now()
-    where telegram_chat_id=p_chat_id and mission_id=p_mission_id and period_key=v_period and subject_key=v_subject;
-  v_balance:=public.group_wallet_change(p_chat_id,p_user_id,m.reward_coins,'group_mission_reward','mission:'||p_mission_id||':'||v_period||':'||v_subject);
+  if exists(select 1 from public.group_mission_claims where telegram_chat_id=p_chat_id and mission_id=p_mission_id and period_key=v_period and user_id=p_user_id) then
+    raise exception 'group_mission_claimed' using errcode='23505';
+  end if;
+  insert into public.group_mission_claims(telegram_chat_id,mission_id,period_key,user_id)
+    values(p_chat_id,p_mission_id,v_period,p_user_id);
+  if m.scope='member' then
+    update public.group_mission_progress set claimed_at=now()
+      where telegram_chat_id=p_chat_id and mission_id=p_mission_id and period_key=v_period and subject_key=v_subject;
+  end if;
+  v_balance:=public.group_wallet_change(p_chat_id,p_user_id,m.reward_coins,'group_mission_reward','mission:'||p_mission_id||':'||v_period||':'||p_user_id::text);
   return v_balance;
 end;
-$$;
+$;
 
 alter table public.group_economies enable row level security;
 alter table public.group_wallets enable row level security;
@@ -497,9 +519,10 @@ alter table public.group_game_participants enable row level security;
 alter table public.group_mission_definitions enable row level security;
 alter table public.group_mission_progress enable row level security;
 alter table public.group_mission_events enable row level security;
+alter table public.group_mission_claims enable row level security;
 revoke all on public.group_economies,public.group_wallets,public.group_currency_transactions,public.group_legend_cards,
   public.group_quiz_questions,public.group_games,public.group_game_participants,public.group_mission_definitions,
-  public.group_mission_progress,public.group_mission_events from public,anon,authenticated;
+  public.group_mission_progress,public.group_mission_events,public.group_mission_claims from public,anon,authenticated;
 
 revoke all on function public.group_wallet_change(bigint,uuid,bigint,text,text) from public,anon,authenticated;
 revoke all on function public.record_group_mission_event(bigint,uuid,text,text) from public,anon,authenticated;
