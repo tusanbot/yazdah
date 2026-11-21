@@ -34,7 +34,7 @@ begin
     raise exception 'admin_access_required' using errcode='42501';
   end if;
   update public.telegram_notification_outbox
-  set status='pending',available_at=now(),locked_at=null,last_error=null
+  set status='pending',attempts=0,available_at=now(),locked_at=null,last_error=null
   where id=p_notification_id and status='failed'
   returning id into v_updated_id;
   if v_updated_id is null then return false; end if;
