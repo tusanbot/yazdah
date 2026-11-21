@@ -83,22 +83,6 @@ function safeGameState(game: Record<string, any>, userId: string) {
   return state;
 }
 
-async function recordEvent(
-  supabase: SupabaseClient,
-  chatId: number,
-  userId: string,
-  eventType: string,
-  eventKey: string,
-) {
-  const { error } = await supabase.rpc("record_group_mission_event", {
-    p_chat_id: chatId,
-    p_user_id: userId,
-    p_event_type: eventType,
-    p_event_key: eventKey,
-  });
-  if (error) throw error;
-}
-
 export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies) {
   const { supabase, readSession, botInternalSecret, botToken } = deps;
 
@@ -179,8 +163,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       request.log.error({ err: failed.error }, "group game overview failed");
       return reply.code(500).send({ error: "group_games_load_failed" });
     }
-    const { data: participantRows } = await supabase.from("group_game_participants").select("game_id,user_id,score,status,formation")
+    const { data: participantRows, error: participantError } = await supabase.from("group_game_participants").select("game_id,user_id,score,status,formation")
       .in("game_id", (games.data ?? []).map((item) => item.id));
+    if (participantError) return reply.code(500).send({ error: "group_game_participants_load_failed" });
     const participantMap = new Map<string, typeof participantRows>();
     for (const row of participantRows ?? []) {
       const current = participantMap.get(row.game_id) ?? [];
@@ -232,8 +217,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       .eq("id", request.params.gameId).eq("telegram_chat_id", chatId).maybeSingle();
     if (error) return reply.code(500).send({ error: "group_game_load_failed" });
     if (!game) return reply.code(404).send({ error: "group_game_not_found" });
-    const { data: participants } = await supabase.from("group_game_participants")
+    const { data: participants, error: participantsError } = await supabase.from("group_game_participants")
       .select("user_id,club_id,formation,score,status,picks,joined_at").eq("game_id", game.id).order("joined_at");
+    if (participantsError) return reply.code(500).send({ error: "group_game_participants_load_failed" });
     const me = (participants ?? []).find((p) => p.user_id === userId);
     return {
       game: { ...game, state: safeGameState(game as Record<string, any>, userId) },
@@ -419,7 +405,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       supabase.from("group_wallets").select("balance")
         .eq("telegram_chat_id", chatId).eq("user_id", userId).maybeSingle(),
     ]);
-    if (progressResult.error || claimsResult.error) return reply.code(500).send({ error: "group_missions_progress_load_failed" });
+    if (progressResult.error || claimsResult.error || walletResult.error) return reply.code(500).send({ error: "group_missions_progress_load_failed" });
     return {
       walletBalance: walletResult.data?.balance ?? 0,
       missions: (defs ?? []).map((mission) => {
