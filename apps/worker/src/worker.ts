@@ -159,6 +159,43 @@ async function enqueueDueWork() {
   }
 }
 
+const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+
+async function deliverTelegramNotifications() {
+  if (!telegramBotToken) return 0;
+  const { data, error } = await supabase.rpc("claim_telegram_notifications", { p_limit: 20 });
+  if (error) throw new Error(`telegram_notification_claim_failed:${error.message}`);
+  let processed = 0;
+  for (const item of (data ?? []) as Array<{ id: string; telegram_user_id: number | string; message_text: string; attempts: number }>) {
+    processed += 1;
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: item.telegram_user_id, text: item.message_text }),
+      });
+      const result = await response.json() as { ok?: boolean; description?: string };
+      if (!response.ok || !result.ok) throw new Error(result.description ?? `telegram_http_${response.status}`);
+      const { error: updateError } = await supabase.from("telegram_notification_outbox")
+        .update({ status: "sent", sent_at: new Date().toISOString(), locked_at: null, last_error: null })
+        .eq("id", item.id);
+      if (updateError) throw new Error(updateError.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "telegram_delivery_failed";
+      const permanent = /blocked by the user|chat not found|bot was blocked|user is deactivated/i.test(message);
+      const { error: updateError } = await supabase.from("telegram_notification_outbox")
+        .update({
+          status: permanent || item.attempts >= 8 ? "failed" : "pending",
+          available_at: new Date(Date.now() + Math.min(3600, 30 * 2 ** Math.min(item.attempts, 7)) * 1000).toISOString(),
+          locked_at: null,
+          last_error: message.slice(0, 1000),
+        }).eq("id", item.id);
+      if (updateError) console.error(JSON.stringify({ event: "telegram_notification_state_failed", id: item.id, error: updateError.message }));
+    }
+  }
+  return processed;
+}
+
 async function pollOnce() {
   const { data, error } = await supabase.rpc("claim_game_job", { p_lease_seconds: leaseSeconds });
   if (error) throw new Error(error.message);
@@ -189,8 +226,9 @@ while (!stopping) {
       await enqueueDueWork();
       lastScheduledAt = Date.now();
     }
+    const notifications = await deliverTelegramNotifications();
     const found = await pollOnce();
-    if (!found) await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (!found && notifications === 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
   } catch (error) {
     console.error(JSON.stringify({ event: "worker_poll_error", error: error instanceof Error ? error.message : "unknown" }));
     await new Promise((resolve) => setTimeout(resolve, pollMs));
