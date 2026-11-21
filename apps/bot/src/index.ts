@@ -2,6 +2,8 @@ import { Bot, InlineKeyboard } from "grammy";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
+const apiUrl = process.env.YAZDAH_API_URL;
+const botInternalSecret = process.env.BOT_INTERNAL_SECRET;
 
 if (!token) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -114,9 +116,37 @@ bot.command("group", async (ctx) => {
     await ctx.reply("اتصال گروه به بازی باید توسط مالک یا مدیر گروه انجام شود.");
     return;
   }
-  await ctx.reply("گروه شناسایی شد. اتصال امن این گروه و مدیریت چالش‌ها از پنل بازی انجام می‌شود؛ این نسخه هنوز اتصال گروه را از داخل تلگرام ثبت نمی‌کند.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
-  });
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("اتصال گروه هنوز در تنظیمات سرویس فعال نشده است.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({
+        telegramUserId: ctx.from.id,
+        telegramChatId: ctx.chat.id,
+        title: ctx.chat.title ?? "گروه تلگرام",
+      }),
+    });
+    const body = await response.json() as { error?: string; linked?: boolean };
+    if (!response.ok) {
+      const message = body.error === "telegram_user_not_registered"
+        ? "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز، سپس دوباره /group را اجرا کن."
+        : body.error === "club_required_before_group_link"
+          ? "برای اتصال گروه، ابتدا باید باشگاهت را در مینی‌اپ ایجاد کنی."
+          : "ثبت اتصال گروه انجام نشد؛ کمی بعد دوباره تلاش کن.";
+      await ctx.reply(message);
+      return;
+    }
+    await ctx.reply("گروه با موفقیت به یازده متصل شد. از این پس می‌توان چالش‌های گروهی را برای این گروه ثبت کرد.", {
+      reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
+    });
+  } catch (error) {
+    console.error("Telegram group linking failed", error);
+    await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+  }
 });
 
 bot.catch((error) => {
