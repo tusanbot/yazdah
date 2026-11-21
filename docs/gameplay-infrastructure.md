@@ -37,7 +37,8 @@
 - `GET /competitions/:competitionId/standings` — جدول رقابت با امتیاز، بازی، برد/مساوی/باخت و تفاضل گل؛ در Mini App از کارت مسابقه قابل مشاهده است.
 - `POST /internal/telegram-groups/games` — ایجاد چالش با راز داخلی و تأیید مجدد مدیر بودن در Telegram.
 - `GET /groups/:chatId/games`, `GET /groups/:chatId/games/:gameId` — فهرست و جزئیات چالش‌ها با بررسی عضویت واقعی تلگرام.
-- `POST /groups/:chatId/games/:gameId/join`, `/start`, `/draft-pick`, `/action` — ورود، شروع و اجرای بازی‌ها.
+- `GET /groups/:chatId/wallet` — موجودی و دفتر تراکنش‌های ارز گروه.
+- `POST /groups/:chatId/games/:gameId/join`, `/start`, `/cancel`, `/draft-pick`, `/action`, `/hint` — ورود، شروع، لغو با بازپرداخت، انتخاب درفت، اجرای بازی و دریافت سرنخ.
 - `GET /groups/:chatId/missions`, `POST /groups/:chatId/missions/:missionId/claim` — پیشرفت و دریافت پاداش مأموریت‌های گروهی.
 
 
