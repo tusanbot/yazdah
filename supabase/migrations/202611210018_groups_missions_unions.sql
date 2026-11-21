@@ -14,6 +14,7 @@ create table if not exists public.group_challenges (
   challenger_club_id uuid not null references public.clubs(id) on delete cascade,
   opponent_club_id uuid not null references public.clubs(id) on delete cascade,
   match_id uuid references public.matches(id) on delete set null,
+  requested_kickoff_at timestamptz not null default (now() + interval '1 day'),
   status text not null default 'pending' check (status in ('pending','accepted','completed','declined','expired')),
   created_at timestamptz not null default now(),
   accepted_at timestamptz,
@@ -177,8 +178,8 @@ begin
  if not exists(select 1 from public.telegram_game_groups where telegram_chat_id=p_telegram_chat_id) then
    raise exception 'telegram_group_not_linked' using errcode='P0002';
  end if;
- insert into public.group_challenges(telegram_chat_id,challenger_club_id,opponent_club_id)
- values(p_telegram_chat_id,p_challenger_club_id,p_opponent_club_id) returning id into v_challenge_id;
+ insert into public.group_challenges(telegram_chat_id,challenger_club_id,opponent_club_id,requested_kickoff_at)
+ values(p_telegram_chat_id,p_challenger_club_id,p_opponent_club_id,p_kickoff_at) returning id into v_challenge_id;
  return v_challenge_id;
 end;
 $$;
@@ -191,7 +192,7 @@ begin
  if v_challenge.status<>'pending' or v_challenge.opponent_club_id<>p_opponent_club_id then
    raise exception 'challenge_not_available' using errcode='22023';
  end if;
- if p_kickoff_at<=now() then raise exception 'challenge_kickoff_invalid' using errcode='22023'; end if;
+ if p_kickoff_at<=now() or p_kickoff_at<>v_challenge.requested_kickoff_at then raise exception 'challenge_kickoff_invalid' using errcode='22023'; end if;
  insert into public.matches(home_club_id,away_club_id,kickoff_at)
  values(v_challenge.challenger_club_id,v_challenge.opponent_club_id,p_kickoff_at)
  returning id into v_match_id;
