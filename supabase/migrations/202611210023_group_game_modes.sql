@@ -130,6 +130,7 @@ begin
           perform public.record_group_mission_event(v_chat,v_part.user_id,'game_completed','complete:'||p_game_id||':'||v_part.user_id);
         end loop;
         if v_winner is not null then perform public.record_group_mission_event(v_chat,v_winner,'game_won','win:'||p_game_id||':'||v_winner); end if;
+        perform public.record_group_mission_event(v_chat,v_users[1],'group_game_completed','group-complete:'||p_game_id);
         return jsonb_build_object('completed',true,'winner',v_winner);
       end if;
       update public.group_games set state=jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round+1),true),'{used}',v_used,true)
@@ -164,6 +165,7 @@ begin
           perform public.record_group_mission_event(v_chat,v_part.user_id,'game_completed','complete:'||p_game_id||':'||v_part.user_id);
         end loop;
         if v_winner is not null then perform public.record_group_mission_event(v_chat,v_winner,'game_won','win:'||p_game_id||':'||v_winner); end if;
+        perform public.record_group_mission_event(v_chat,v_users[1],'group_game_completed','group-complete:'||p_game_id);
         return jsonb_build_object('completed',true,'winner',v_winner);
       end if;
       update public.group_games set state=jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round+1),true),'{actions}','{}'::jsonb,true),
@@ -225,7 +227,9 @@ begin
             update public.group_game_participants set status='eliminated' where game_id=p_game_id and user_id=v_part.user_id;
           end if;
         end loop;
-        perform public.record_group_mission_event(v_chat,p_user_id,'survival_survived','survival-round:'||p_game_id||':'||v_round||':'||p_user_id);
+        for v_part in select user_id from public.group_game_participants where game_id=p_game_id and status='active' loop
+          perform public.record_group_mission_event(v_chat,v_part.user_id,'survival_survived','survival-round:'||p_game_id||':'||v_round||':'||v_part.user_id);
+        end loop;
       end if;
       select array_agg(user_id) into v_active from public.group_game_participants where game_id=p_game_id and status='active';
       if g.game_type='survival' and (coalesce(array_length(v_active,1),0)<=1 or v_round>=10) then
@@ -297,6 +301,13 @@ begin
   return v_count;
 end;
 $$;
+
+insert into public.group_mission_definitions(id,title,description,cadence,scope,event_type,target_count,reward_coins) values
+('weekly-draft','استاد درفت','پنج بازیکن را در رقابت‌های درفت انتخاب کن','weekly','member','draft_pick',5,800),
+('weekly-survival','بازمانده سرسخت','در پنج مرحله از چالش بقا زنده بمان','weekly','member','survival_survived',5,1000),
+('weekly-quiz-master','دانش‌پژوه فوتبال','پنج پاسخ صحیح در چالش‌های اطلاعاتی بده','weekly','member','quiz_correct',5,700),
+('monthly-champion','قهرمان ماه','پنج چالش گروهی را ببر','monthly','member','game_won',5,2500)
+on conflict(id) do nothing;
 
 revoke all on function public.submit_group_game_action(uuid,uuid,jsonb,boolean) from public,anon,authenticated;
 revoke all on function public.process_expired_group_games(integer) from public,anon,authenticated;
