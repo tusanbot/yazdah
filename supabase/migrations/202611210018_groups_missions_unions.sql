@@ -94,3 +94,46 @@ alter table public.mission_definitions enable row level security;
 alter table public.club_mission_progress enable row level security;
 alter table public.club_unions enable row level security;
 alter table public.club_union_members enable row level security;
+
+-- Progress is event-driven and monotonic; repeat delivery is deduplicated by event key.
+create table if not exists public.mission_progress_events (
+  event_key text primary key,
+  club_id uuid not null references public.clubs(id) on delete cascade,
+  mission_type text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.mission_progress_events enable row level security;
+
+create or replace function public.record_mission_progress(p_club_id uuid,p_mission_type text,p_event_key text)
+returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+  if p_event_key is null or length(p_event_key) not between 1 and 200 then
+    raise exception 'mission_event_key_invalid' using errcode='22023';
+  end if;
+  insert into public.mission_progress_events(event_key,club_id,mission_type)
+  values(p_event_key,p_club_id,p_mission_type) on conflict do nothing;
+  if not found then return; end if;
+  insert into public.club_mission_progress(club_id,mission_id,progress)
+  select p_club_id,id,1 from public.mission_definitions
+  where mission_type=p_mission_type and active=true
+  on conflict(club_id,mission_id) do update
+    set progress=least(public.club_mission_progress.progress+1,1000000),updated_at=now()
+    where public.club_mission_progress.claimed_at is null;
+end;
+$$;
+revoke all on function public.record_mission_progress(uuid,text,text) from public,anon,authenticated;
+grant execute on function public.record_mission_progress(uuid,text,text) to service_role;
+
+create or replace function public.track_completed_match_missions()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+  if new.status='completed' and old.status is distinct from 'completed' then
+    perform public.record_mission_progress(new.home_club_id,'match_played','match:'||new.id||':home');
+    perform public.record_mission_progress(new.away_club_id,'match_played','match:'||new.id||':away');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists matches_track_mission_progress on public.matches;
+create trigger matches_track_mission_progress after update of status on public.matches
+for each row execute function public.track_completed_match_missions();
