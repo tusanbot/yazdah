@@ -357,6 +357,73 @@ app.post<{ Body: { entitlementId?: string } }>("/clubs/me/special-player-entitle
   return { success: true, playerId: data };
 });
 
+app.get("/clubs/me/special-player-packs", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const [packs, economy] = await Promise.all([
+    supabase.from("special_player_packs").select("pack_key,title,price").eq("active", true).order("price"),
+    supabase.from("club_economy").select("balance").eq("club_id", clubId).single(),
+  ]);
+  if (packs.error || economy.error) {
+    request.log.error({ err: packs.error ?? economy.error }, "special player packs lookup failed");
+    return reply.code(500).send({ error: "special_packs_load_failed" });
+  }
+  return { packs: packs.data ?? [], balance: economy.data.balance };
+});
+
+app.post<{ Body: { packKey?: string; idempotencyKey?: string } }>("/clubs/me/special-player-packs/open", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { packKey, idempotencyKey } = request.body ?? {};
+  if (typeof packKey !== "string" || !["epic", "legendary", "iconic"].includes(packKey) ||
+      typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 1 || idempotencyKey.trim().length > 160) {
+    return reply.code(400).send({ error: "special_pack_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("open_special_player_pack", {
+    p_user_id: userId,
+    p_club_id: clubId,
+    p_pack_key: packKey,
+    p_idempotency_key: idempotencyKey.trim(),
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "special_pack_input_invalid" });
+    if (error.code === "42501") return reply.code(403).send({ error: "club_owner_required" });
+    if (error.code === "P0002") {
+      if (error.message?.includes("pool_empty")) return reply.code(409).send({ error: "special_pack_pool_empty" });
+      return reply.code(404).send({ error: "special_pack_unavailable" });
+    }
+    if (error.message?.includes("insufficient_funds")) return reply.code(409).send({ error: "insufficient_funds" });
+    if (error.code === "23505") return reply.code(409).send({ error: "special_pack_idempotency_conflict" });
+    request.log.error({ err: error }, "special player pack opening failed");
+    return reply.code(500).send({ error: "special_pack_open_failed" });
+  }
+  const opening = Array.isArray(data) ? data[0] : data;
+  if (!opening) return reply.code(500).send({ error: "special_pack_open_failed" });
+  return {
+    openingId: opening.opening_id,
+    playerId: opening.player_id,
+    packKey: opening.pack_key,
+    chargedAmount: opening.charged_amount,
+    balance: opening.balance,
+  };
+});
+
 app.get<{ Querystring: { class?: string } }>("/players/catalog", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
