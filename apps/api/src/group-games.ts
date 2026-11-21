@@ -38,46 +38,70 @@ async function telegramMember(botToken: string | undefined, chatId: number, user
   }
 }
 
-function safeGameState(game: Record<string, any>, userId: string) {
-  const state = structuredClone(game.state ?? {});
-  if (game.game_type === "quiz" || game.game_type === "survival") {
-    const q = state.questions?.[(state.round ?? 1) - 1];
-    state.currentQuestion = q ? { id: q.id, category: q.category, prompt: q.prompt, options: q.options } : null;
-    state.myAnswerSubmitted = Boolean(state.answers?.[userId]);
+type JsonRecord = Record<string, unknown>;
+type CardRecord = { id: string };
+
+function safeGameState(game: JsonRecord, userId: string): JsonRecord {
+  const state = structuredClone((game.state as JsonRecord | null) ?? {});
+  const gameType = String(game.game_type ?? "");
+  const round = Number(state.round ?? 1);
+
+  if (gameType === "quiz" || gameType === "survival") {
+    const questions = state.questions as JsonRecord[] | undefined;
+    const question = questions?.[round - 1];
+    const options = Array.isArray(question?.options) ? question.options as string[] : [];
+    state.currentQuestion = question ? {
+      id: String(question.id ?? ""),
+      category: String(question.category ?? ""),
+      prompt: String(question.prompt ?? ""),
+      options,
+    } : null;
+    const answers = state.answers as Record<string, unknown> | undefined;
+    state.myAnswerSubmitted = Boolean(answers?.[userId]);
     delete state.questions;
     delete state.answers;
-  } else if (game.game_type === "guess") {
-    const player = state.players?.[(state.round ?? 1) - 1];
-    const clueLevel = Number(state.hintLevels?.[userId] ?? 1);
+  } else if (gameType === "guess") {
+    const players = state.players as JsonRecord[] | undefined;
+    const player = players?.[round - 1];
+    const hints = state.hintLevels as Record<string, unknown> | undefined;
+    const clueLevel = Number(hints?.[userId] ?? 1);
+    const allClues = Array.isArray(player?.clues) ? player.clues as string[] : [];
     state.currentPlayer = player ? {
-      clues: (player.clues ?? []).slice(0, clueLevel),
+      clues: allClues.slice(0, clueLevel),
       clueLevel,
-      totalClues: (player.clues ?? []).length,
-      round: state.round,
+      totalClues: allClues.length,
+      round,
     } : null;
+    const answers = state.answers as Record<string, unknown> | undefined;
+    state.myAnswerSubmitted = Boolean(answers?.[userId]);
     delete state.hintLevels;
-    state.myAnswerSubmitted = Boolean(state.answers?.[userId]);
     delete state.players;
     delete state.answers;
-  } else if (game.game_type === "cards") {
-    state.myHand = state.hands?.[userId] ?? [];
-    state.myUsedCardIds = state.used?.[userId] ?? [];
-    state.mySelectionSubmitted = Boolean(state.selected?.[userId]);
+  } else if (gameType === "cards") {
+    const hands = state.hands as Record<string, unknown[]> | undefined;
+    const used = state.used as Record<string, string[]> | undefined;
+    const selected = state.selected as Record<string, unknown> | undefined;
+    state.myHand = hands?.[userId] ?? [];
+    state.myUsedCardIds = used?.[userId] ?? [];
+    state.mySelectionSubmitted = Boolean(selected?.[userId]);
     delete state.hands;
     delete state.deck;
     delete state.selected;
     delete state.used;
-  } else if (game.game_type === "penalty") {
-    state.myActionSubmitted = Boolean(state.actions?.[userId]);
-    const first = state.users?.[0] === userId;
-    state.myRole = first === ((state.round ?? 1) % 2 === 1) ? "shooter" : "keeper";
+  } else if (gameType === "penalty") {
+    const actions = state.actions as Record<string, unknown> | undefined;
+    const users = state.users as string[] | undefined;
+    state.myActionSubmitted = Boolean(actions?.[userId]);
+    const first = users?.[0] === userId;
+    state.myRole = first === (round % 2 === 1) ? "shooter" : "keeper";
     delete state.actions;
-  } else if (game.game_type === "draft") {
-    const used = new Set(state.used ?? []);
+  } else if (gameType === "draft") {
+    const used = new Set(Array.isArray(state.used) ? state.used as string[] : []);
+    const pools = state.pools as Record<string, CardRecord[]> | undefined;
     state.availablePools = Object.fromEntries(
-      Object.entries(state.pools ?? {}).map(([key, cards]) => [
+      Object.entries(pools ?? {}).map(([key, cards]) => [
         key,
-        (cards as Array<{ id: string }>).filter((card) => !used.has(card.id)),
+        cards.filter((card) => !used.has(card.id)),
       ]),
     );
     delete state.pools;
@@ -229,7 +253,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (participantsError) return reply.code(500).send({ error: "group_game_participants_load_failed" });
     const me = (participants ?? []).find((p) => p.user_id === userId);
     return {
-      game: { ...game, state: safeGameState(game as Record<string, any>, userId) },
+      game: { ...game, state: safeGameState(game as Record<string, unknown>, userId) },
       participants: (participants ?? []).map((p) => ({
         ...p,
         picks: game.game_type === "draft" || (game.game_type === "cards" && game.status === "completed") ? p.picks : [],
