@@ -479,7 +479,7 @@ app.post<{ Body: { clubId?: string; catalogPlayerId?: string; referenceId?: stri
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (typeof clubId !== "string" || !uuidPattern.test(clubId) ||
       typeof catalogPlayerId !== "string" || !uuidPattern.test(catalogPlayerId) ||
-      typeof referenceId !== "string' || referenceId.trim().length < 1 || referenceId.trim().length > 160 ||
+      typeof referenceId !== "string" || referenceId.trim().length < 1 || referenceId.trim().length > 160 ||
       typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 1 || idempotencyKey.trim().length > 160) {
     return reply.code(400).send({ error: "special_event_reward_input_invalid" });
   }
