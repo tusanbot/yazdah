@@ -486,6 +486,28 @@ app.get("/competitions", async (request, reply) => {
   return { competitions: data ?? [] };
 });
 
+app.get<{ Params: { competitionId: string } }>("/competitions/:competitionId/standings", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  const competitionId = request.params.competitionId;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(competitionId)) {
+    return reply.code(400).send({ error: "competition_id_invalid" });
+  }
+  const { data, error } = await supabase.from("competition_entries")
+    .select("club_id, points, played, wins, draws, losses, goals_for, goals_against, club:clubs(name, slug)")
+    .eq("competition_id", competitionId)
+    .order("points", { ascending: false })
+    .order("goals_for", { ascending: false })
+    .order("goals_against", { ascending: true })
+    .limit(100);
+  if (error) {
+    request.log.error({ err: error }, "competition standings lookup failed");
+    return reply.code(500).send({ error: "competition_standings_load_failed" });
+  }
+  return { standings: data ?? [] };
+});
+
 app.post<{ Body: { fullName?: string; birthDate?: string; position?: string; potential?: number } }>("/clubs/me/academy", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
