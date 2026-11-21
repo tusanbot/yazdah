@@ -195,6 +195,25 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     };
   });
 
+  app.get<{ Params: { chatId: string } }>("/groups/:chatId/wallet", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user } = await supabase.from("game_users").select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
+      return reply.code(403).send({ error: "telegram_group_membership_required" });
+    }
+    const [wallet, transactions] = await Promise.all([
+      supabase.from("group_wallets").select("balance").eq("telegram_chat_id", chatId).eq("user_id", userId).maybeSingle(),
+      supabase.from("group_currency_transactions").select("id,amount,balance_after,reason,created_at")
+        .eq("telegram_chat_id", chatId).eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
+    ]);
+    if (wallet.error || transactions.error) return reply.code(500).send({ error: "group_wallet_load_failed" });
+    return { balance: wallet.data?.balance ?? 0, transactions: transactions.data ?? [] };
+  });
+
   app.get<{ Params: { chatId: string; gameId: string } }>("/groups/:chatId/games/:gameId", async (request, reply) => {
     if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
     const userId = readSession(request.headers.authorization);
