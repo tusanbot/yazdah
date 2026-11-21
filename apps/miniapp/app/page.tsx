@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import GroupGames from "../components/GroupGames";
 
 declare global {
   interface Window {
@@ -699,6 +700,7 @@ export default function HomePage() {
                 </div>}
                 {challengeStatus && <p className="notice" role="status">{challengeStatus}</p>}
               </section>
+              {session && <GroupGames accessToken={session.accessToken} />}
               {communityStatus && <p className="notice" role="status">{communityStatus}</p>}
             </section>
             <section className="training-plan" aria-labelledby="tactics-heading">
