@@ -53,6 +53,9 @@ export default function HomePage() {
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [lineupStatus, setLineupStatus] = useState("");
+  const [lineupBusy, setLineupBusy] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffBusy, setStaffBusy] = useState(false);
   const [staffStatus, setStaffStatus] = useState("");
@@ -124,9 +127,31 @@ export default function HomePage() {
     const response = await fetch(`${API_URL}/clubs/me/players`, { headers: { Authorization: `Bearer ${accessToken}` } });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "بارگذاری فهرست بازیکنان ناموفق بود.");
-    setPlayers(body.players as SquadPlayer[]);
+    const roster = body.players as SquadPlayer[];
+    setPlayers(roster);
+    setSelectedPlayerIds(roster.filter((player) => player.squad_slot?.[0]).sort((a, b) => (a.squad_slot?.[0]?.slot_no ?? 99) - (b.squad_slot?.[0]?.slot_no ?? 99)).map((player) => player.id));
   }
 
+  async function saveLineup() {
+    if (!session || selectedPlayerIds.length !== 11) return;
+    setLineupBusy(true);
+    setLineupStatus("");
+    try {
+      const response = await fetch(API_URL + "/clubs/me/lineup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.accessToken },
+        body: JSON.stringify({ playerIds: selectedPlayerIds }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ثبت ترکیب ناموفق بود.");
+      await loadPlayers(session.accessToken);
+      setLineupStatus("ترکیب اصلی با موفقیت ذخیره شد.");
+    } catch (error) {
+      setLineupStatus(error instanceof Error ? error.message : "ذخیره ترکیب ناموفق بود.");
+    } finally {
+      setLineupBusy(false);
+    }
+  }
   async function loadAcademy(accessToken: string) {
     const response = await fetch(`${API_URL}/clubs/me/academy`, { headers: { Authorization: `Bearer ${accessToken}` } });
     const body = await response.json();
@@ -257,8 +282,12 @@ export default function HomePage() {
               {players.length === 0 ? <p className="muted">هنوز بازیکنی در تیم اصلی ثبت نشده است. از آکادمی بازیکن جذب و ارتقا بده.</p> : <div className="prospects">
                 {players.map((player) => <article className="prospect" key={player.id}>
                   <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p><small>آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"}</small></div>
+                  <label><input type="checkbox" checked={selectedPlayerIds.includes(player.id)} onChange={(event) => setSelectedPlayerIds((ids) => event.target.checked ? [...ids, player.id] : ids.filter((id) => id !== player.id))} /> انتخاب برای ترکیب</label>
                 </article>)}
-              </div>}
+              </div>
+              <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
+              <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
+              {lineupStatus && <p className="notice" role="status">{lineupStatus}</p>}
             </section>
             <section className="academy" aria-labelledby="staff-heading">
               <h2 id="staff-heading">مدیریت کادر فنی</h2>
