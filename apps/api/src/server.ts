@@ -953,15 +953,15 @@ app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?:
   try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
   if (!clubId) return reply.code(404).send({ error: "club_not_found" });
   const { telegramChatId, opponentClubId, kickoffAt } = request.body ?? {};
-  const { data: linkedGroup, error: linkedGroupError } = await supabase.from("telegram_game_groups")
-    .select("telegram_chat_id").eq("telegram_chat_id", telegramChatId).eq("linked_by_user_id", userId).maybeSingle();
-  if (linkedGroupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
-  if (!linkedGroup) return reply.code(403).send({ error: "telegram_group_owner_required" });
   if (!Number.isSafeInteger(telegramChatId) || typeof opponentClubId !== "string" ||
       !/^[0-9a-f-]{36}$/i.test(opponentClubId) || typeof kickoffAt !== "string" ||
       !Number.isFinite(Date.parse(kickoffAt)) || Date.parse(kickoffAt) <= Date.now()) {
     return reply.code(400).send({ error: "group_challenge_input_invalid" });
   }
+  const { data: linkedGroup, error: linkedGroupError } = await supabase.from("telegram_game_groups")
+    .select("telegram_chat_id").eq("telegram_chat_id", telegramChatId).eq("linked_by_user_id", userId).maybeSingle();
+  if (linkedGroupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
+  if (!linkedGroup) return reply.code(403).send({ error: "telegram_group_owner_required" });
   const { data, error } = await supabase.rpc("create_group_challenge", {
     p_telegram_chat_id: telegramChatId, p_challenger_club_id: clubId,
     p_opponent_club_id: opponentClubId, p_kickoff_at: kickoffAt,
