@@ -399,6 +399,7 @@ begin
     v_moved:=false;
     for v_item in select value from jsonb_array_elements(v_rows)
       where value->>'position_group'=v_lines[v_source]
+        and coalesce(value->>'assignedLine',value->>'position_group')=v_lines[v_source]
       order by (value->>'overall')::int asc loop
       v_rows:=jsonb_set(v_rows,array[(select ordinality-1 from jsonb_array_elements(v_rows) with ordinality e(value,ordinality) where e.value->>'id'=v_item->>'id' limit 1)::text,'assignedLine'],to_jsonb(v_lines[v_target]),true);
       v_moved:=true; exit;
