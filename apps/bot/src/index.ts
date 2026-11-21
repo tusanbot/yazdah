@@ -55,12 +55,56 @@ bot.command("union", async (ctx) => {
 
 bot.command("challenge", async (ctx) => {
   if (ctx.chat.type === "private") {
-    await ctx.reply("چالش‌های گروهی از داخل گروه تلگرام و با اتصال گروه به بازی انجام می‌شوند.");
+    await ctx.reply("این دستور را داخل گروهِ متصل به یازده اجرا کن. برای ساخت: /challenge <شناسه‌باشگاه‌حریف> <زمان-ISO> و برای پذیرش: /challenge accept <شناسه‌چالش>");
     return;
   }
-  await ctx.reply("برای ساخت یا پذیرش چالش گروهی، ابتدا باشگاهتان را در مینی‌اپ مدیریت کنید. اتصال گروه و انتخاب حریف باید توسط مدیر گروه انجام شود.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
-  });
+  const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false);
+  if (!isAdmin) {
+    await ctx.reply("ساخت یا پذیرش چالش فقط توسط مالک یا مدیر گروه مجاز است.");
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("اتصال چالش‌ها هنوز در تنظیمات سرویس فعال نشده است.");
+    return;
+  }
+  const args = ctx.match.trim().split(/\\s+/).filter(Boolean);
+  const action = args[0]?.toLowerCase() === "accept" ? "accept" : "create";
+  const payload = action === "accept"
+    ? { action, challengeId: args[1] }
+    : { action, opponentClubId: args[0], kickoffAt: args[1] };
+  if ((action === "accept" && args.length !== 2) || (action === "create" && args.length !== 2)) {
+    await ctx.reply("ساخت چالش: /challenge <شناسه‌باشگاه‌حریف> <زمان-ISO>\nپذیرش چالش: /challenge accept <شناسه‌چالش>\nزمان باید ISO 8601 و در آینده باشد.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({ ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id }),
+    });
+    const body = await response.json() as { error?: string; challengeId?: string; matchId?: string; accepted?: boolean };
+    if (!response.ok) {
+      const messages: Record<string, string> = {
+        telegram_user_not_registered: "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز.",
+        telegram_group_not_linked: "ابتدا گروه را با دستور /group به یازده متصل کن.",
+        telegram_group_owner_required: "فقط مدیری که گروه را به بازی متصل کرده می‌تواند چالش ثبت کند.",
+        club_required_before_group_challenge: "ابتدا باشگاهت را در مینی‌اپ ایجاد کن.",
+        challenge_opponent_club_required: "این باشگاه، حریف تعیین‌شده برای این چالش نیست.",
+        challenge_not_found: "چالش در این گروه پیدا نشد.",
+        challenge_not_available: "این چالش قبلاً پذیرفته شده یا دیگر در دسترس نیست.",
+      };
+      await ctx.reply(messages[body.error ?? ""] ?? "عملیات چالش انجام نشد؛ شناسه‌ها و زمان را بررسی کن.");
+      return;
+    }
+    await ctx.reply(action === "create"
+      ? `چالش ثبت شد. شناسهٔ چالش: ${body.challengeId}\nبرای پذیرش، مدیر باشگاه حریف باید در همین گروه اجرا کند: /challenge accept ${body.challengeId}`
+      : `چالش پذیرفته شد و مسابقه ساخته شد. شناسهٔ مسابقه: ${body.matchId}`);
+  } catch (error) {
+    console.error("Telegram group challenge failed", error);
+    await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+  }
 });
 
 bot.command("market", async (ctx) => {
