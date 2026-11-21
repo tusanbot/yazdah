@@ -390,7 +390,7 @@ end;
 $$;
 
 create or replace function public.settle_group_game_prize(p_game_id uuid,p_winners uuid[])
-returns void language plpgsql security definer set search_path=public,pg_temp as $
+returns void language plpgsql security definer set search_path=public,pg_temp as $$
 declare g public.group_games%rowtype; v_count integer; v_share bigint; v_remainder bigint; v_user uuid; v_index integer:=0; v_winners uuid[];
 begin
   select * into g from public.group_games where id=p_game_id for update;
@@ -512,7 +512,7 @@ create table if not exists public.group_mission_claims (
 
 create or replace function public.claim_group_mission(
   p_chat_id bigint,p_user_id uuid,p_mission_id text
-) returns bigint language plpgsql security definer set search_path=public,pg_temp as $
+) returns bigint language plpgsql security definer set search_path=public,pg_temp as $$
 declare m public.group_mission_definitions%rowtype; v_period text; v_subject text; v_progress public.group_mission_progress%rowtype; v_balance bigint;
 begin
   select * into m from public.group_mission_definitions where id=p_mission_id and active;
