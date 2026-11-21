@@ -437,7 +437,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
                   <div>
                     <strong>{gameLabels[game.game_type]}</strong>
                     <p>{game.title}</p>
-                    <small>{game.status === "open" ? "در انتظار شرکت‌کننده" : game.status === "active" ? "در حال اجرا" : "پایان‌یافته"} · {game.participants.length}/{game.max_participants} نفر · ورودی {Number(game.entry_fee).toLocaleString("fa-IR")} · جایزه {Number(game.prize_pool).toLocaleString("fa-IR")}</small>
+                    <small>{game.status === "open" ? "در انتظار شرکت‌کننده" : game.status === "active" ? "در حال اجرا" : "پایان‌یافته"} · {game.participants?.length ?? 0}/{game.max_participants} نفر · ورودی {Number(game.entry_fee).toLocaleString("fa-IR")} · جایزه {Number(game.prize_pool).toLocaleString("fa-IR")}</small>
                   </div>
                   <button type="button" disabled={busy} onClick={() => void openGame(game.id)}>مشاهده</button>
                 </article>
