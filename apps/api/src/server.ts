@@ -318,7 +318,7 @@ app.get("/clubs/me/players", async (request, reply) => {
   if (!clubId) return reply.code(404).send({ error: "club_not_found" });
 
   const { data, error } = await supabase.from("players")
-    .select("id, full_name, birth_date, nationality_code, position, overall, potential, fitness, morale, contract_until, weekly_wage, squad_slot:club_squad_slots(slot_no)")
+    .select("id, full_name, birth_date, nationality_code, position, overall, potential, fitness, morale, contract_until, weekly_wage, player_class, ordinary_tier, release_clause, acquisition_source, squad_slot:club_squad_slots(slot_no)")
     .eq("club_id", clubId).order("overall", { ascending: false }).order("full_name", { ascending: true });
   if (error) {
     request.log.error({ err: error }, "club roster lookup failed");
@@ -721,7 +721,7 @@ app.get("/clubs/me/staff", async (request, reply) => {
   }
   if (!clubId) return reply.code(404).send({ error: "club_not_found" });
   const { data, error } = await supabase.from("club_staff")
-    .select("id, full_name, staff_role, specialty, skill, weekly_wage, contract_until, hired_at, released_at")
+    .select("id, full_name, staff_role, staff_tier, specialty, skill, weekly_wage, signing_fee, generated_source, effect_profile, contract_until, hired_at, released_at")
     .eq("club_id", clubId).order("hired_at", { ascending: false }).limit(100);
   if (error) {
     request.log.error({ err: error }, "staff lookup failed");
@@ -742,7 +742,7 @@ app.post<{ Body: { fullName?: string; staffRole?: string; specialty?: string; sk
   if (!clubId) return reply.code(404).send({ error: "club_not_found" });
   const { fullName, staffRole, specialty, skill, weeklyWage, contractUntil, idempotencyKey } = request.body ?? {};
   if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 80 ||
-      typeof staffRole !== "string" || !["coach","technical","medical","fitness","transfer_director"].includes(staffRole) ||
+      typeof staffRole !== "string" || !["head_coach","coach","technical","medical","fitness","transfer_director"].includes(staffRole) ||
       (specialty !== undefined && (typeof specialty !== "string" || specialty.length > 80)) ||
       !Number.isInteger(skill) || skill! < 1 || skill! > 100 ||
       !Number.isSafeInteger(weeklyWage) || weeklyWage! < 0 || weeklyWage! > 100000000 ||
