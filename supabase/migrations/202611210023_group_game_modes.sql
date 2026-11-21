@@ -256,6 +256,7 @@ begin
           perform public.record_group_mission_event(v_chat,v_part.user_id,'game_completed','complete:'||p_game_id||':'||v_part.user_id);
         end loop;
         if v_winner is not null then perform public.record_group_mission_event(v_chat,v_winner,'game_won','win:'||p_game_id||':'||v_winner); end if;
+        perform public.record_group_mission_event(v_chat,v_users[1],'group_game_completed','group-complete:'||p_game_id);
         return jsonb_build_object('completed',true,'winner',v_winner,'round',v_round);
       end if;
       update public.group_games set state=jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round+1),true),'{answers}','{}'::jsonb,true),
