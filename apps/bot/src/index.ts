@@ -36,6 +36,14 @@ bot.command("start", async (ctx) => {
     });
     return;
   }
+  if (ctx.chat.type === "group" || ctx.chat.type === "supergroup") {
+    const botInfo = await bot.api.getMe();
+    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${ctx.chat.id}`)}`;
+    await ctx.reply("برای باز کردن بازی‌های این گروه، مینی‌اپ را در گفت‌وگوی خصوصی ربات باز کن.", {
+      reply_markup: new InlineKeyboard().url("باز کردن بازی‌های گروه", privateLink),
+    });
+    return;
+  }
   await ctx.reply(
     "به یازده خوش آمدی! از اینجا می‌توانی وارد باشگاهت شوی و بازی را از ربات یا مینی‌اپ ادامه بدهی.",
     { reply_markup: mainMenu() },
