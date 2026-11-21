@@ -109,6 +109,13 @@ function safeGameState(game: JsonRecord, userId: string): JsonRecord {
   return state;
 }
 
+async function verifyGameGroup(supabase: SupabaseClient, gameId: string, chatId: number) {
+  const { data, error } = await supabase.from("group_games")
+    .select("id").eq("id", gameId).eq("telegram_chat_id", chatId).maybeSingle();
+  if (error) return "error" as const;
+  return data ? "ok" as const : "missing" as const;
+}
+
 export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies) {
   const { supabase, readSession, botInternalSecret, botToken } = deps;
 
@@ -283,10 +290,16 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
         return reply.code(403).send({ error: "telegram_group_membership_required" });
       }
+      const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+      if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+      if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
       const { data: membership, error: membershipError } = await supabase.from("club_memberships")
         .select("club_id").eq("user_id", userId).eq("role", "owner").maybeSingle();
       if (membershipError) return reply.code(500).send({ error: "club_lookup_failed" });
       if (!membership) return reply.code(409).send({ error: "club_required_before_group_game" });
+      const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+      if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+      if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
       const { data, error } = await supabase.rpc("join_group_game", {
         p_game_id: request.params.gameId, p_user_id: userId, p_club_id: membership.club_id, p_formation: formation,
       });
@@ -308,6 +321,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
       return reply.code(403).send({ error: "telegram_group_membership_required" });
     }
+    const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+    if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+    if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
     const { data, error } = await supabase.rpc("cancel_group_game", {
       p_game_id: request.params.gameId, p_actor_user_id: userId,
     });
@@ -328,6 +344,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
       return reply.code(403).send({ error: "telegram_group_membership_required" });
     }
+    const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+    if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+    if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
     const { error } = await supabase.rpc("start_group_game", { p_game_id: request.params.gameId, p_actor_user_id: userId });
     if (error) {
       const map: Record<string, number> = { P0002: 404, "22023": 409, "42501": 403 };
@@ -347,6 +366,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
         return reply.code(403).send({ error: "telegram_group_membership_required" });
       }
+      const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+      if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+      if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
       if (typeof request.body?.cardId !== "string" || request.body.cardId.length > 80) return reply.code(400).send({ error: "draft_card_invalid" });
       const { data, error } = await supabase.rpc("pick_group_draft_player", {
         p_game_id: request.params.gameId, p_user_id: userId, p_card_id: request.body.cardId, p_auto: false,
@@ -370,6 +392,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
         return reply.code(403).send({ error: "telegram_group_membership_required" });
       }
+      const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+      if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+      if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
       const action = request.body ?? {};
       const { data, error } = await supabase.rpc("submit_group_game_action", {
         p_game_id: request.params.gameId,
@@ -397,6 +422,9 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
       return reply.code(403).send({ error: "telegram_group_membership_required" });
     }
+    const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
+    if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
+    if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
     const { data, error } = await supabase.rpc("reveal_group_guess_hint", {
       p_game_id: request.params.gameId, p_user_id: userId,
     });
