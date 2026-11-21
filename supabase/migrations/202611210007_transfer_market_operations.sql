@@ -5,6 +5,11 @@ alter table public.transfer_listings
   add column if not exists buyer_club_id uuid references public.clubs(id) on delete set null,
   add column if not exists sold_at timestamptz;
 
+-- The original schema allowed only one listing ever per player; allow relisting after withdrawal or sale.
+alter table public.transfer_listings drop constraint if exists transfer_listings_player_id_key;
+create unique index if not exists transfer_listings_one_active_player_idx
+  on public.transfer_listings(player_id) where status = 'listed';
+
 create or replace function public.list_player_for_transfer(
   p_club_id uuid,
   p_player_id uuid,
