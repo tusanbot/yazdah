@@ -26,7 +26,7 @@ function mainMenu() {
 
 bot.command("start", async (ctx) => {
   const payload = ctx.match.trim();
-  const groupLink = payload.match(/^group_(-?\\d+)(?:_([0-9a-f-]{36}))?$/i);
+  const groupLink = payload.match(/^group_(-?\d+)(?:_([0-9a-f-]{36}))?$/i);
   if (groupLink) {
     const groupChatId = groupLink[1];
     const gameId = groupLink[2];
