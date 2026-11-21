@@ -35,6 +35,8 @@ set search_path = public, pg_temp
 as $$
 declare
   v_entitlement_id uuid;
+  v_existing_catalog_id uuid;
+  v_existing_reference_id text;
 begin
   if p_club_id is null or p_catalog_player_id is null
     or p_source not in ('epic_pack','legendary_pack','iconic_pack','tournament','special_event')
@@ -59,9 +61,15 @@ begin
   returning id into v_entitlement_id;
 
   if v_entitlement_id is null then
-    select id into v_entitlement_id from public.special_player_entitlements
+    select id, catalog_player_id, reference_id
+      into v_entitlement_id, v_existing_catalog_id, v_existing_reference_id
+    from public.special_player_entitlements
     where club_id = p_club_id and source = p_source
       and idempotency_key = trim(p_idempotency_key);
+    if v_existing_catalog_id <> p_catalog_player_id
+      or v_existing_reference_id <> trim(p_reference_id) then
+      raise exception 'special_entitlement_idempotency_conflict' using errcode = '23505';
+    end if;
   end if;
   return v_entitlement_id;
 end;
