@@ -106,23 +106,22 @@ set search_path = public, pg_temp
 as $$
 declare
   v_comp public.competitions%rowtype;
+  v_round integer;
   v_remaining integer;
-  v_next_round integer;
   v_winners uuid[];
   v_i integer;
 begin
-  if new.status <> 'completed' or old.status = 'completed' or new.competition_id is null then
-    return new;
-  end if;
-
-  select * into v_comp from public.competitions where id = new.competition_id for update;
+  select * into v_comp from public.competitions where id=new.competition_id for update;
   if not found or v_comp.status in ('completed','cancelled') then return new; end if;
 
-  if exists (
-    select 1 from public.matches
-    where competition_id = v_comp.id and competition_round = new.competition_round
-      and status not in ('completed','cancelled')
-  ) then
+  select max(competition_round) into v_round from public.matches
+  where competition_id=v_comp.id and status='completed';
+  if v_round is null then return new; end if;
+
+  select count(*) into v_remaining from public.matches
+  where competition_id=v_comp.id and competition_round=v_round
+    and status not in ('completed','cancelled');
+  if v_remaining > 0 then
     update public.competitions set status='running' where id=v_comp.id and status='scheduled';
     return new;
   end if;
@@ -132,16 +131,15 @@ begin
                     order by kickoff_at, id)
       into v_winners
     from public.matches
-    where competition_id=v_comp.id and competition_round=new.competition_round and status='completed';
+    where competition_id=v_comp.id and competition_round=v_round and status='completed';
 
     if cardinality(v_winners) = 1 then
       update public.competitions set status='completed', champion_club_id=v_winners[1], completed_at=now()
       where id=v_comp.id;
     elsif cardinality(v_winners) >= 2 then
-      v_next_round := new.competition_round + 1;
       for v_i in 1..(cardinality(v_winners) / 2) loop
         insert into public.matches(competition_id, home_club_id, away_club_id, kickoff_at, competition_round)
-        values (v_comp.id, v_winners[v_i*2-1], v_winners[v_i*2], now() + interval '1 day', v_next_round);
+        values (v_comp.id, v_winners[v_i*2-1], v_winners[v_i*2], now() + interval '1 day', v_round+1);
       end loop;
       update public.competitions set status='running' where id=v_comp.id;
     end if;
@@ -149,13 +147,13 @@ begin
     select count(*) into v_remaining from public.matches
     where competition_id=v_comp.id and status not in ('completed','cancelled');
     if v_remaining=0 then
-      select club_id into v_comp.champion_club_id
-      from public.competition_entries
-      where competition_id=v_comp.id
-      order by points desc, (goals_for-goals_against) desc, goals_for desc, club_id
-      limit 1;
-      update public.competitions set status='completed', champion_club_id=v_comp.champion_club_id, completed_at=now()
-      where id=v_comp.id;
+      update public.competitions c
+      set status='completed',
+          champion_club_id=(select club_id from public.competition_entries
+            where competition_id=c.id
+            order by points desc, (goals_for-goals_against) desc, goals_for desc, club_id limit 1),
+          completed_at=now()
+      where c.id=v_comp.id;
     end if;
   end if;
   return new;
@@ -163,8 +161,9 @@ end;
 $$;
 
 drop trigger if exists matches_advance_competition_lifecycle on public.matches;
-create trigger matches_advance_competition_lifecycle
-after update of status on public.matches
+drop trigger if exists entries_advance_competition_lifecycle on public.competition_entries;
+create trigger entries_advance_competition_lifecycle
+after update of played on public.competition_entries
 for each row execute function public.advance_competition_lifecycle();
 
 revoke all on function public.create_competition_schedule(text,text,integer,uuid[],timestamptz,integer) from public, anon, authenticated;
