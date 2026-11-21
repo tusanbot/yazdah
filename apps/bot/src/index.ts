@@ -31,9 +31,15 @@ bot.command("menu", async (ctx) => {
   await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
 });
 
+bot.command("market", async (ctx) => {
+  await ctx.reply("برای خریدوفروش بازیکنان، بازار نقل‌وانتقالات یازده را باز کن.", {
+    reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", miniAppUrl),
+  });
+});
+
 bot.command("help", async (ctx) => {
   await ctx.reply(
-    "راهنمای یازده\n/start — شروع و ورود به باشگاه\n/menu — نمایش منوی اصلی\n/help — راهنما\n\nمدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.",
+    "راهنمای یازده\n/start — شروع و ورود به باشگاه\n/menu — نمایش منوی اصلی\n/market — بازار نقل‌وانتقالات\n/help — راهنما\n\nمدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.",
     { reply_markup: mainMenu() },
   );
 });
