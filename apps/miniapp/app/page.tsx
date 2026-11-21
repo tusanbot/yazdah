@@ -243,7 +243,8 @@ export default function HomePage() {
         label { display: grid; gap: 8px; font-size: 14px; }
         label span { color: #9aabc0; font-weight: normal; }
         input { width: 100%; background: #0b1422; border: 1px solid #34465f; border-radius: 12px; padding: 13px 14px; color: #fff; font: inherit; }
-        select { width: 100%; background: #0b1422; border: 1px solid #34465f; border-radius: 12px; padding: 10px; color: #fff; font: inherit; }\n        input:focus { outline: 2px solid #478ce6; border-color: transparent; }
+        select { width: 100%; background: #0b1422; border: 1px solid #34465f; border-radius: 12px; padding: 10px; color: #fff; font: inherit; }
+        input:focus { outline: 2px solid #478ce6; border-color: transparent; }
         button { margin-top: 6px; padding: 14px; border: 0; border-radius: 12px; background: #3478db; color: white; font: inherit; font-weight: bold; cursor: pointer; }
         button:disabled { opacity: .6; cursor: wait; }
         .notice { background: #253247; border-radius: 10px; padding: 12px; line-height: 1.7; }
