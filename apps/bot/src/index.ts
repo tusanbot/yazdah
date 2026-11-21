@@ -107,6 +107,84 @@ bot.command("challenge", async (ctx) => {
   }
 });
 
+bot.command("game", async (ctx) => {
+  if (ctx.chat.type === "private") {
+    await ctx.reply("این فرمان را داخل گروه متصل اجرا کن. نمونه: /game draft 100 یا /game survival 0 20\nانواع: draft، penalty، cards، quiz، guess، survival");
+    return;
+  }
+  const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false);
+  if (!isAdmin) {
+    await ctx.reply("فقط مدیران گروه می‌توانند چالش جدید ایجاد کنند.");
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("سرویس چالش‌های گروهی پیکربندی نشده است.");
+    return;
+  }
+  const args = ctx.match.trim().split(/\\s+/).filter(Boolean);
+  const aliases: Record<string, string> = {
+    draft: "draft", درفت: "draft",
+    penalty: "penalty", پنالتی: "penalty",
+    cards: "cards", کارت: "cards", "کارت-بازی": "cards",
+    quiz: "quiz", اطلاعات: "quiz",
+    guess: "guess", حدس: "guess",
+    survival: "survival", بقا: "survival",
+  };
+  const gameType = aliases[(args[0] ?? "").toLowerCase()];
+  const entryFee = args[1] === undefined ? 0 : Number(args[1]);
+  const maxParticipants = args[2] === undefined ? 2 : Number(args[2]);
+  if (!gameType || !Number.isSafeInteger(entryFee) || entryFee < 0 || entryFee > 1000000 ||
+    !Number.isSafeInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 30) {
+    await ctx.reply("فرمت: /game <draft|penalty|cards|quiz|guess|survival> <ورودی‌سکه> [تعداد‌شرکت‌کننده]\nبرای چالش رایگان عدد ورودی را ۰ بگذار. درفت، پنالتی و کارت بازی دو نفره‌اند.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/games`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({
+        telegramUserId: ctx.from.id,
+        telegramChatId: ctx.chat.id,
+        gameType,
+        entryFee,
+        maxParticipants,
+      }),
+    });
+    const body = await response.json() as { error?: string; gameId?: string; maxParticipants?: number };
+    if (!response.ok) {
+      const messages: Record<string, string> = {
+        telegram_group_admin_required: "تأیید مدیر بودن در تلگرام انجام نشد.",
+        telegram_group_not_linked: "ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.",
+        telegram_user_not_registered: "ابتدا از طریق مینی‌اپ وارد یازده شو و باشگاهت را بساز.",
+        club_required_before_group_game: "برای ساخت چالش باید باشگاه داشته باشی.",
+      };
+      await ctx.reply(messages[body.error ?? ""] ?? "ایجاد چالش ناموفق بود؛ کمی بعد دوباره تلاش کن.");
+      return;
+    }
+    const gameUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${ctx.chat.id}&gameId=${body.gameId}`;
+    await ctx.reply(
+      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای پیوستن و اجرای چالش، مینی‌اپ گروه را باز کنید.`,
+      { reply_markup: new InlineKeyboard().webApp("ورود به چالش گروه", gameUrl) },
+    );
+  } catch (error) {
+    console.error("Group game creation failed", error);
+    await ctx.reply("ارتباط با سرویس چالش‌ها برقرار نشد.");
+  }
+});
+
+bot.command("games", async (ctx) => {
+  if (ctx.chat.type === "private") {
+    await ctx.reply("برای دیدن چالش‌های گروه، این فرمان را داخل گروه تلگرام اجرا کن.");
+    return;
+  }
+  const gameUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${ctx.chat.id}`;
+  await ctx.reply("چالش‌ها، کیف پول گروه و مأموریت‌های گروهی:", {
+    reply_markup: new InlineKeyboard().webApp("باز کردن چالش‌های گروه", gameUrl),
+  });
+});
+
 bot.command("market", async (ctx) => {
   await ctx.reply("برای خریدوفروش بازیکنان، بازار نقل‌وانتقالات یازده را باز کن.", {
     reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", miniAppUrl),
