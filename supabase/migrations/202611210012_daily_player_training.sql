@@ -30,18 +30,14 @@ begin
     return 0;
   end if;
 
+  select count(*) into v_count
+  from public.players
+  where club_id = p_club_id and overall < potential;
+
   update public.players
   set overall = least(potential, overall + 1),
       fitness = greatest(0, fitness - 2)
-  where club_id = p_club_id
-    and overall < potential;
-  get diagnostics v_count = row_count;
-
-  -- Players at their potential still recover from the training workload.
-  update public.players
-  set fitness = greatest(0, fitness - 2)
-  where club_id = p_club_id
-    and overall >= potential;
+  where club_id = p_club_id;
 
   update public.club_daily_state
   set training_applied = true
