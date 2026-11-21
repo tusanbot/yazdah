@@ -226,6 +226,101 @@ app.get("/market", async (request, reply) => {
   }
 });
 
+app.get("/clubs/me/transfer-listings", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("transfer_listings")
+    .select("id, player_id, asking_price, listed_at, expires_at, status")
+    .eq("seller_club_id", clubId).eq("status", "listed").order("listed_at", { ascending: false });
+  if (error) {
+    request.log.error({ err: error }, "club transfer listings lookup failed");
+    return reply.code(500).send({ error: "transfer_listings_load_failed" });
+  }
+  return { listings: data ?? [] };
+});
+
+app.post<{ Body: { playerId?: string; askingPrice?: number } }>("/clubs/me/transfer-listings", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { playerId, askingPrice } = request.body ?? {};
+  if (typeof playerId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(playerId) ||
+      !Number.isSafeInteger(askingPrice) || askingPrice! < 1 || askingPrice! > 1000000000000) {
+    return reply.code(400).send({ error: "transfer_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("list_player_for_transfer", {
+    p_club_id: clubId, p_player_id: playerId, p_asking_price: askingPrice,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "transfer_player_invalid_or_not_owned" });
+    if (error.code === "23505") return reply.code(409).send({ error: "transfer_already_listed" });
+    request.log.error({ err: error }, "player listing failed");
+    return reply.code(500).send({ error: "transfer_listing_failed" });
+  }
+  return reply.code(201).send({ listingId: data });
+});
+
+app.post<{ Body: { listingId?: string } }>("/market/buy", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const listingId = request.body?.listingId;
+  if (typeof listingId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(listingId)) {
+    return reply.code(400).send({ error: "transfer_listing_id_invalid" });
+  }
+  const { error } = await supabase.rpc("buy_transfer_listing", { p_buyer_club_id: clubId, p_listing_id: listingId });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: error.message.includes("insufficient_funds") ? "insufficient_funds" : "transfer_unavailable" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "transfer_listing_not_found" });
+    request.log.error({ err: error }, "transfer purchase failed");
+    return reply.code(500).send({ error: "transfer_purchase_failed" });
+  }
+  return { success: true };
+});
+
+app.post<{ Body: { listingId?: string } }>("/clubs/me/transfer-listings/withdraw", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const listingId = request.body?.listingId;
+  if (typeof listingId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(listingId)) {
+    return reply.code(400).send({ error: "transfer_listing_id_invalid" });
+  }
+  const { error } = await supabase.rpc("withdraw_transfer_listing", { p_club_id: clubId, p_listing_id: listingId });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "transfer_listing_not_owned_or_unavailable" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "transfer_listing_not_found" });
+    request.log.error({ err: error }, "transfer listing withdrawal failed");
+    return reply.code(500).send({ error: "transfer_withdraw_failed" });
+  }
+  return { success: true };
+});
+
 app.get("/inbox", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
