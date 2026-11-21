@@ -46,6 +46,10 @@ export default function HomePage() {
   const [prospects, setProspects] = useState<AcademyProspect[]>([]);
   const [academyBusy, setAcademyBusy] = useState(false);
   const [academyStatus, setAcademyStatus] = useState("");
+  const [prospectName, setProspectName] = useState("");
+  const [prospectBirthDate, setProspectBirthDate] = useState("");
+  const [prospectPosition, setProspectPosition] = useState("ST");
+  const [prospectPotential, setProspectPotential] = useState(60);
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -110,6 +114,30 @@ export default function HomePage() {
     setProspects(body.prospects as AcademyProspect[]);
   }
 
+  async function recruitProspect(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    setAcademyBusy(true);
+    setAcademyStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/academy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ fullName: prospectName.trim(), birthDate: prospectBirthDate, position: prospectPosition, potential: prospectPotential }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ثبت استعداد ناموفق بود.");
+      await loadAcademy(session.accessToken);
+      setProspectName("");
+      setProspectBirthDate("");
+      setAcademyStatus("استعداد جدید به آکادمی اضافه شد.");
+    } catch (error) {
+      setAcademyStatus(error instanceof Error ? error.message : "خطای نامشخص در آکادمی.");
+    } finally {
+      setAcademyBusy(false);
+    }
+  }
+
   async function promoteProspect(prospectId: string) {
     if (!session) return;
     setAcademyBusy(true);
@@ -160,6 +188,14 @@ export default function HomePage() {
                   {prospect.status === "training" && <button type="button" disabled={academyBusy} onClick={() => promoteProspect(prospect.id)}>{academyBusy ? "در حال انتقال…" : "ارتقا به تیم اصلی"}</button>}
                 </article>)}
               </div>}
+              <form className="recruit-form" onSubmit={recruitProspect}>
+                <h3>ثبت استعداد جدید</h3>
+                <label>نام بازیکن<input required minLength={2} maxLength={80} value={prospectName} onChange={(event) => setProspectName(event.target.value)} /></label>
+                <label>تاریخ تولد<input required type="date" value={prospectBirthDate} onChange={(event) => setProspectBirthDate(event.target.value)} /></label>
+                <label>پست<input required value={prospectPosition} onChange={(event) => setProspectPosition(event.target.value)} /></label>
+                <label>پتانسیل (۱ تا ۱۰۰)<input required type="number" min={1} max={100} value={prospectPotential} onChange={(event) => setProspectPotential(Number(event.target.value))} /></label>
+                <button type="submit" disabled={academyBusy}>{academyBusy ? "در حال ثبت…" : "افزودن به آکادمی"}</button>
+              </form>
               {academyStatus && <p className="notice" role="status">{academyStatus}</p>}
             </section>
           </div>
@@ -214,6 +250,10 @@ export default function HomePage() {
         .academy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #28634f; }
         .academy h2 { margin: 0 0 8px; }
         .prospects { display: grid; gap: 10px; }
+        .recruit-form { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #34465f; }
+        .recruit-form h3 { margin: 0; }
+        .recruit-form label { display: grid; gap: 6px; font-size: 13px; }
+        .recruit-form input { padding: 10px; }
         .prospect { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #34465f; border-radius: 12px; background: #101a29; }
         .prospect p { margin: 6px 0; font-size: 13px; }
         .prospect small { color: #a6b5c9; }
