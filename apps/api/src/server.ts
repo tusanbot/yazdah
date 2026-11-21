@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { verifyTelegramInitData } from "./telegram-auth.js";
+import { registerGroupGameRoutes } from "./group-games.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
@@ -1075,6 +1076,8 @@ app.post<{ Body: { challengeId?: string; kickoffAt?: string } }>("/clubs/me/grou
   }
   return { accepted: true, matchId: data };
 });
+
+registerGroupGameRoutes(app, { supabase, readSession, botInternalSecret, botToken });
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
