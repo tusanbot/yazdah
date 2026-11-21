@@ -188,6 +188,28 @@ async function ownedClubId(userId: string): Promise<string | null> {
   return data?.club_id ?? null;
 }
 
+app.get("/clubs/me/players", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+
+  const { data, error } = await supabase.from("players")
+    .select("id, full_name, birth_date, nationality_code, position, overall, potential, fitness, morale, contract_until, weekly_wage, squad_slot:club_squad_slots(slot_no)")
+    .eq("club_id", clubId).order("overall", { ascending: false }).order("full_name", { ascending: true });
+  if (error) {
+    request.log.error({ err: error }, "club roster lookup failed");
+    return reply.code(500).send({ error: "players_load_failed" });
+  }
+  return { players: data ?? [] };
+});
+
 app.get("/market", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
