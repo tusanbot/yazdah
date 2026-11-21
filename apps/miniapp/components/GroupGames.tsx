@@ -319,7 +319,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
 
           {detail.game.status === "open" && (
             <div className="join-panel">
-              {!detail.isParticipant ? (
+              {!detail.isParticipant && (
                 <>
                   <label>آرایش چهار بازیکن خطی
                     <select value={formation} onChange={(event) => setFormation(event.target.value)}>
@@ -328,9 +328,9 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
                   </label>
                   <button type="button" disabled={busy} onClick={() => void joinGame(detail.game)}>ورود به چالش · {Number(detail.game.entry_fee).toLocaleString("fa-IR")} سکه</button>
                 </>
-              ) : detail.isCreator ? (
-                <button type="button" disabled={busy || detail.participants.length < 2} onClick={() => void startGame(detail.game.id)}>شروع چالش</button>
-              ) : <p>منتظر شروع چالش توسط سازنده بمان.</p>}
+              )}
+              {detail.isCreator && <button type="button" disabled={busy || detail.participants.length < 2} onClick={() => void startGame(detail.game.id)}>شروع چالش</button>}
+              {detail.isParticipant && !detail.isCreator && <p>منتظر شروع چالش توسط سازنده بمان.</p>}
               {detail.isCreator && <button type="button" className="cancel" disabled={busy} onClick={() => void cancelGame(detail.game.id)}>لغو چالش و بازگرداندن ورودی‌ها</button>}
             </div>
           )}
