@@ -389,6 +389,28 @@ begin
 end;
 $$;
 
+create or replace function public.settle_group_game_prize(p_game_id uuid,p_winners uuid[])
+returns void language plpgsql security definer set search_path=public,pg_temp as $
+declare g public.group_games%rowtype; v_count integer; v_share bigint; v_remainder bigint; v_user uuid; v_index integer:=0;
+begin
+  select * into g from public.group_games where id=p_game_id for update;
+  if not found or g.state->>'prizeSettled'='true' or g.prize_pool<=0 then return; end if;
+  select count(distinct x) into v_count from unnest(coalesce(p_winners,'{}'::uuid[])) x where x is not null;
+  if v_count=0 then
+    update public.group_games set state=jsonb_set(state,'{prizeSettled}','true'::jsonb,true) where id=p_game_id;
+    return;
+  end if;
+  v_share:=g.prize_pool/v_count;
+  v_remainder:=g.prize_pool-(v_share*v_count);
+  for v_user in select distinct x from unnest(p_winners) x where x is not null order by x loop
+    v_index:=v_index+1;
+    perform public.group_wallet_change(g.telegram_chat_id,v_user,v_share+case when v_index=1 then v_remainder else 0 end,
+      'challenge_prize',p_game_id::text||':prize:'||v_user::text);
+  end loop;
+  update public.group_games set state=jsonb_set(state,'{prizeSettled}','true'::jsonb,true) where id=p_game_id;
+end;
+$;
+
 create or replace function public.pick_group_draft_player(p_game_id uuid,p_user_id uuid,p_card_id text,p_auto boolean default false)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare g public.group_games%rowtype; v_card jsonb; v_pool jsonb; v_picks jsonb; v_users uuid[]; v_other uuid; v_round int; v_next uuid; v_starter uuid; v_lineup1 jsonb; v_lineup2 jsonb; v_score1 int; v_score2 int; v_winner uuid; v_formation1 text; v_formation2 text; v_key text;
@@ -435,7 +457,7 @@ begin
       update public.group_games set status='completed',completed_at=now(),deadline_at=null,winner_user_id=v_winner,
         state=state||jsonb_build_object('resolvedLineups',jsonb_build_object(v_users[1]::text,v_lineup1,v_users[2]::text,v_lineup2),'scores',jsonb_build_object(v_users[1]::text,v_score1,v_users[2]::text,v_score2))
         where id=p_game_id;
-      if v_winner is not null and g.prize_pool>0 then perform public.group_wallet_change(g.telegram_chat_id,v_winner,g.prize_pool,'challenge_prize',p_game_id::text||':winner'); end if;
+      if g.prize_pool>0 then perform public.settle_group_game_prize(p_game_id,case when v_winner is null then array[v_users[1],v_users[2]] else array[v_winner] end); end if;
       perform public.record_group_mission_event(g.telegram_chat_id,v_users[1],'game_completed','complete:'||p_game_id||':'||v_users[1]);
       perform public.record_group_mission_event(g.telegram_chat_id,v_users[2],'game_completed','complete:'||p_game_id||':'||v_users[2]);
       if v_winner is not null then perform public.record_group_mission_event(g.telegram_chat_id,v_winner,'game_won','win:'||p_game_id||':'||v_winner); end if;
