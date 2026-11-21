@@ -20,6 +20,7 @@ type AuthResult = {
 };
 type MarketListing = { id: string; asking_price: number; listed_at: string; player: { id: string; full_name: string; position: string; overall: number; potential: number; nationality_code: string | null }; seller: { id: string; name: string; slug: string } };
 type OwnListing = { id: string; player_id: string; asking_price: number; status: string };
+type Standing = { club_id: string; points: number; played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; club: { name: string; slug: string } | null };
 type ClubMatch = { id: string; competition_id: string | null; home_club_id: string; away_club_id: string; kickoff_at: string; status: string; home_score: number | null; away_score: number | null; competition: { name: string; competition_type: string; season: number } | null };
 type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
@@ -59,6 +60,8 @@ export default function HomePage() {
   const [matches, setMatches] = useState<ClubMatch[]>([]);
   const [matchBusyId, setMatchBusyId] = useState("");
   const [matchStatus, setMatchStatus] = useState("");
+  const [standings, setStandings] = useState<Record<string, Standing[]>>({});
+  const [standingsBusyId, setStandingsBusyId] = useState("");
   const [marketListings, setMarketListings] = useState<MarketListing[]>([]);
   const [ownListings, setOwnListings] = useState<OwnListing[]>([]);
   const [marketPrices, setMarketPrices] = useState<Record<string, string>>({});
@@ -142,6 +145,23 @@ export default function HomePage() {
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "بارگذاری مسابقات ناموفق بود.");
     setMatches(body.matches as ClubMatch[]);
+  }
+
+  async function loadStandings(competitionId: string) {
+    if (!session) return;
+    setStandingsBusyId(competitionId);
+    try {
+      const response = await fetch(`${API_URL}/competitions/${competitionId}/standings`, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "بارگذاری جدول رقابت ناموفق بود.");
+      setStandings((current) => ({ ...current, [competitionId]: body.standings as Standing[] }));
+    } catch (error) {
+      setMatchStatus(error instanceof Error ? error.message : "بارگذاری جدول رقابت ناموفق بود.");
+    } finally {
+      setStandingsBusyId("");
+    }
   }
 
   async function resolveMatch(matchId: string) {
@@ -405,7 +425,17 @@ export default function HomePage() {
                   const canResolve = match.status === "scheduled" && new Date(match.kickoff_at).getTime() <= Date.now();
                   return <article className="prospect" key={match.id}>
                     <div><strong>{match.competition?.name ?? "مسابقه دوستانه"}</strong><p>{home ? "میزبان" : "میهمان"} · حریف: {opponentId.slice(0, 8)}</p><small>{new Date(match.kickoff_at).toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tehran" })} · {result}</small></div>
-                    {canResolve && <button type="button" disabled={matchBusyId === match.id} onClick={() => resolveMatch(match.id)}>{matchBusyId === match.id ? "در حال ثبت…" : "ثبت نتیجه"}</button>}
+                    <div className="actions">
+                      {match.competition_id && <button type="button" disabled={standingsBusyId === match.competition_id} onClick={() => loadStandings(match.competition_id!)}>{standingsBusyId === match.competition_id ? "در حال بارگذاری…" : "جدول رقابت"}</button>}
+                      {canResolve && <button type="button" disabled={matchBusyId === match.id} onClick={() => resolveMatch(match.id)}>{matchBusyId === match.id ? "در حال ثبت…" : "ثبت نتیجه"}</button>}
+                    </div>
+                    {match.competition_id && standings[match.competition_id] && <div className="standings">
+                      <strong>جدول رقابت</strong>
+                      <ol>{standings[match.competition_id].map((entry) => <li key={entry.club_id}>
+                        <span>{entry.club?.name ?? entry.club_id.slice(0, 8)}</span>
+                        <small>{entry.points} امتیاز · {entry.played} بازی · {entry.wins} برد · {entry.draws} مساوی · {entry.losses} باخت · تفاضل {entry.goals_for - entry.goals_against}</small>
+                      </li>)}</ol>
+                    </div>}
                   </article>;
                 })}
               </div>}
