@@ -24,10 +24,12 @@ async function telegramMember(botToken: string | undefined, chatId: number, user
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, user_id: userId }),
     });
-    const body = await response.json() as { ok?: boolean; result?: { status?: string } };
+    const body = await response.json() as { ok?: boolean; result?: { status?: string; is_member?: boolean } };
     const status = body.result?.status;
+    const isMember = status === "creator" || status === "administrator" || status === "member" ||
+      (status === "restricted" && body.result?.is_member === true);
     return {
-      ok: Boolean(response.ok && body.ok && status && !["left", "kicked"].includes(status)),
+      ok: Boolean(response.ok && body.ok && isMember),
       admin: status === "creator" || status === "administrator",
     };
   } catch {
@@ -343,18 +345,23 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     const { data: defs, error: defsError } = await supabase.from("group_mission_definitions")
       .select("id,title,description,cadence,scope,event_type,target_count,reward_coins").eq("active", true);
     if (defsError) return reply.code(500).send({ error: "group_missions_load_failed" });
-    const { data: progress, error: progressError } = await supabase.from("group_mission_progress")
-      .select("mission_id,period_key,subject_key,progress,claimed_at").eq("telegram_chat_id", chatId);
-    if (progressError) return reply.code(500).send({ error: "group_missions_progress_load_failed" });
-    const { data: wallet } = await supabase.from("group_wallets").select("balance")
-      .eq("telegram_chat_id", chatId).eq("user_id", userId).maybeSingle();
+    const [progressResult, claimsResult, walletResult] = await Promise.all([
+      supabase.from("group_mission_progress")
+        .select("mission_id,period_key,subject_key,progress,claimed_at").eq("telegram_chat_id", chatId),
+      supabase.from("group_mission_claims")
+        .select("mission_id,period_key,claimed_at").eq("telegram_chat_id", chatId).eq("user_id", userId),
+      supabase.from("group_wallets").select("balance")
+        .eq("telegram_chat_id", chatId).eq("user_id", userId).maybeSingle(),
+    ]);
+    if (progressResult.error || claimsResult.error) return reply.code(500).send({ error: "group_missions_progress_load_failed" });
     return {
-      walletBalance: wallet?.balance ?? 0,
+      walletBalance: walletResult.data?.balance ?? 0,
       missions: (defs ?? []).map((mission) => {
         const periodKey = periods[mission.cadence as keyof typeof periods];
         const subjectKey = mission.scope === "group" ? "group" : userId;
-        const row = (progress ?? []).find((item) => item.mission_id === mission.id && item.period_key === periodKey && item.subject_key === subjectKey);
-        return { ...mission, progress: row?.progress ?? 0, claimedAt: row?.claimed_at ?? null, periodKey };
+        const row = (progressResult.data ?? []).find((item) => item.mission_id === mission.id && item.period_key === periodKey && item.subject_key === subjectKey);
+        const claim = (claimsResult.data ?? []).find((item) => item.mission_id === mission.id && item.period_key === periodKey);
+        return { ...mission, progress: row?.progress ?? 0, claimedAt: claim?.claimed_at ?? row?.claimed_at ?? null, periodKey };
       }),
     };
   });
