@@ -283,7 +283,7 @@ begin
 
       else
         select correct_index into v_correct from public.group_quiz_questions
-          where id=(g.state->'questions'->(v_round-1)->>'id');
+          where id=((g.state->'questions'->(v_round-1)->>'id')::uuid);
         for v_part in select user_id from public.group_game_participants where game_id=p_game_id and status='active' loop
           if (v_answers->>(v_part.user_id::text))::int=v_correct then
             update public.group_game_participants set score=score+1 where game_id=p_game_id and user_id=v_part.user_id;
