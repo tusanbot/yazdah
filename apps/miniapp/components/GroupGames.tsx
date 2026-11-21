@@ -311,7 +311,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             {detail.participants.map((participant) => (
               <div className="participant" key={participant.user_id}>
                 <strong>{participant.isMe ? "باشگاه شما" : `شرکت‌کننده ${detail.participants.findIndex((p) => p.user_id === participant.user_id) + 1}`}</strong>
-                <span>{participant.score.toLocaleString("fa-IR")} امتیاز · {formationLabels[participant.formation] ?? participant.formation} · {participant.status === "eliminated" ? "حذف‌شده" : participant.status === "winner" ? "برنده" : participant.status === "completed" ? "پایان‌یافته" : "در رقابت"}</span>
+                <span>{participant.score.toLocaleString("fa-IR")} امتیاز{detail.game.game_type === "draft" ? ` · ${formationLabels[participant.formation] ?? participant.formation}` : ""} · {participant.status === "eliminated" ? "حذف‌شده" : participant.status === "winner" ? "برنده" : participant.status === "completed" ? "پایان‌یافته" : "در رقابت"}</span>
                 {participant.picks?.length > 0 && <small>{participant.picks.map((p) => p.full_name).join("، ")}</small>}
               </div>
             ))}
