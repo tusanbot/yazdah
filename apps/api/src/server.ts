@@ -730,7 +730,7 @@ app.get("/clubs/me/staff", async (request, reply) => {
   return { staff: data ?? [] };
 });
 
-app.post<{ Body: { fullName?: string; staffRole?: string; specialty?: string; skill?: number; weeklyWage?: number; contractUntil?: string; idempotencyKey?: string } }>("/clubs/me/staff", async (request, reply) => {
+app.post<{ Body: { fullName?: string; staffRole?: string; staffTier?: string; specialty?: string; skill?: number; weeklyWage?: number; contractUntil?: string; idempotencyKey?: string } }>("/clubs/me/staff", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
   if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
@@ -740,9 +740,10 @@ app.post<{ Body: { fullName?: string; staffRole?: string; specialty?: string; sk
     return reply.code(500).send({ error: "club_lookup_failed" });
   }
   if (!clubId) return reply.code(404).send({ error: "club_not_found" });
-  const { fullName, staffRole, specialty, skill, weeklyWage, contractUntil, idempotencyKey } = request.body ?? {};
+  const { fullName, staffRole, staffTier, specialty, skill, weeklyWage, contractUntil, idempotencyKey } = request.body ?? {};
   if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 80 ||
       typeof staffRole !== "string" || !["head_coach","coach","technical","medical","fitness","transfer_director"].includes(staffRole) ||
+      !["ordinary","professional","legendary"].includes(staffTier ?? "ordinary") ||
       (specialty !== undefined && (typeof specialty !== "string" || specialty.length > 80)) ||
       !Number.isInteger(skill) || skill! < 1 || skill! > 100 ||
       !Number.isSafeInteger(weeklyWage) || weeklyWage! < 0 || weeklyWage! > 100000000 ||
@@ -753,7 +754,7 @@ app.post<{ Body: { fullName?: string; staffRole?: string; specialty?: string; sk
   const { data, error } = await supabase.rpc("hire_club_staff", {
     p_club_id: clubId, p_full_name: fullName.trim(), p_staff_role: staffRole,
     p_specialty: specialty ?? null, p_skill: skill, p_weekly_wage: weeklyWage,
-    p_contract_until: contractUntil, p_idempotency_key: idempotencyKey,
+    p_contract_until: contractUntil, p_idempotency_key: idempotencyKey, p_staff_tier: staffTier ?? "ordinary",
   });
   if (error) {
     if (error.code === "22023") return reply.code(400).send({ error: error.message === "insufficient_funds" ? "insufficient_funds" : "staff_input_invalid" });
