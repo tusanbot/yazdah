@@ -165,7 +165,7 @@ bot.command("game", async (ctx) => {
     }
     const gameUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${ctx.chat.id}&gameId=${body.gameId}`;
     await ctx.reply(
-      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای پیوستن و اجرای چالش، مینی‌اپ گروه را باز کنید.`,
+      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای پیوستن و اجرای چالش، مینی‌اپ گروه را باز کنید.`,
       { reply_markup: new InlineKeyboard().webApp("ورود به چالش گروه", gameUrl) },
     );
   } catch (error) {
@@ -193,7 +193,7 @@ bot.command("market", async (ctx) => {
 
 bot.command("help", async (ctx) => {
   await ctx.reply(
-    "راهنمای یازده
+    `راهنمای یازده
 /start — شروع و ورود به باشگاه
 /menu — نمایش منوی اصلی
 /market — بازار نقل‌وانتقالات
@@ -204,11 +204,10 @@ bot.command("help", async (ctx) => {
 
 انواع چالش: draft، penalty، cards، quiz، guess، survival
 نمونه: /game draft 100 یا /game survival 0 20
-مدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.",
+مدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.`,
     { reply_markup: mainMenu() },
   );
 });
-
 bot.callbackQuery("help", async (ctx) => {
   await ctx.answerCallbackQuery();
   await ctx.reply(
