@@ -152,7 +152,7 @@ bot.command("game", async (ctx) => {
         maxParticipants,
       }),
     });
-    const body = await response.json() as { error?: string; gameId?: string; maxParticipants?: number };
+    const body = await response.json() as { error?: string; gameId?: string; maxParticipants?: number; prizePool?: number };
     if (!response.ok) {
       const messages: Record<string, string> = {
         telegram_group_admin_required: "تأیید مدیر بودن در تلگرام انجام نشد.",
@@ -197,8 +197,13 @@ bot.command("help", async (ctx) => {
 /start — شروع و ورود به باشگاه
 /menu — نمایش منوی اصلی
 /market — بازار نقل‌وانتقالات
+/game — ساخت چالش گروهی (فقط مدیران گروه)
+/games — مشاهده چالش‌ها و مأموریت‌های گروه
+/missions — مأموریت‌های باشگاه
 /help — راهنما
 
+انواع چالش: draft، penalty، cards، quiz، guess، survival
+نمونه: /game draft 100 یا /game survival 0 20
 مدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.",
     { reply_markup: mainMenu() },
   );
