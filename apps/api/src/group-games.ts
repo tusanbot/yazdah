@@ -40,23 +40,28 @@ function safeGameState(game: Record<string, any>, userId: string) {
   if (game.game_type === "quiz" || game.game_type === "survival") {
     const q = state.questions?.[(state.round ?? 1) - 1];
     state.currentQuestion = q ? { id: q.id, category: q.category, prompt: q.prompt, options: q.options } : null;
+    state.myAnswerSubmitted = Boolean(state.answers?.[userId]);
     delete state.questions;
     delete state.answers;
   } else if (game.game_type === "guess") {
     const player = state.players?.[(state.round ?? 1) - 1];
     state.currentPlayer = player ? {
-      clues: player.clues,
+      clues: (player.clues ?? []).slice(0, 1),
       round: state.round,
     } : null;
+    state.myAnswerSubmitted = Boolean(state.answers?.[userId]);
     delete state.players;
     delete state.answers;
   } else if (game.game_type === "cards") {
     state.myHand = state.hands?.[userId] ?? [];
+    state.mySelectionSubmitted = Boolean(state.selected?.[userId]);
     delete state.hands;
     delete state.deck;
     delete state.selected;
   } else if (game.game_type === "penalty") {
     state.myActionSubmitted = Boolean(state.actions?.[userId]);
+    const first = state.users?.[0] === userId;
+    state.myRole = first === ((state.round ?? 1) % 2 === 1) ? "shooter" : "keeper";
     delete state.actions;
   } else if (game.game_type === "draft") {
     const used = new Set(state.used ?? []);
@@ -321,10 +326,16 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       return reply.code(403).send({ error: "telegram_group_membership_required" });
     }
     const now = new Date();
+    const tehranParts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(now).map((part) => [part.type, part.value]));
+    const localDate = new Date(Date.UTC(Number(tehranParts.year), Number(tehranParts.month) - 1, Number(tehranParts.day)));
+    const localDay = localDate.getUTCDay();
+    localDate.setUTCDate(localDate.getUTCDate() - ((localDay + 6) % 7));
     const periods = {
-      daily: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit" }).format(now),
-      weekly: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7))).toISOString().slice(0, 10),
-      monthly: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(now),
+      daily: `${tehranParts.year}-${tehranParts.month}-${tehranParts.day}`,
+      weekly: localDate.toISOString().slice(0, 10),
+      monthly: `${tehranParts.year}-${tehranParts.month}`,
       collective: "all-time",
     };
     const { data: defs, error: defsError } = await supabase.from("group_mission_definitions")
