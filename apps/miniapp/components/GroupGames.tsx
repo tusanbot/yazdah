@@ -345,7 +345,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
           {detail.game.status === "active" && detail.game.game_type === "cards" && (
             <div className="card-grid">
               {(detail.game.state.myHand ?? []).map((card: any) => (
-                <button type="button" className="player-card" key={card.id} disabled={busy || detail.game.state.mySelectionSubmitted || detail.participants.find((p) => p.isMe)?.picks.some((p: any) => p.id === card.id)} onClick={() => void submitAction({ cardId: card.id })}>
+                <button type="button" className="player-card" key={card.id} disabled={busy || detail.game.state.mySelectionSubmitted || detail.game.state.myUsedCardIds?.includes(card.id)} onClick={() => void submitAction({ cardId: card.id })}>
                   <strong>{card.full_name}</strong><span>{card.overall} قدرت</span><small>{card.rarity === "mythic" ? "افسانه" : "اسطوره"}</small>
                 </button>
               ))}
