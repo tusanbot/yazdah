@@ -192,7 +192,7 @@ export default function HomePage() {
                 <h3>ثبت استعداد جدید</h3>
                 <label>نام بازیکن<input required minLength={2} maxLength={80} value={prospectName} onChange={(event) => setProspectName(event.target.value)} /></label>
                 <label>تاریخ تولد<input required type="date" value={prospectBirthDate} onChange={(event) => setProspectBirthDate(event.target.value)} /></label>
-                <label>پست<input required value={prospectPosition} onChange={(event) => setProspectPosition(event.target.value)} /></label>
+                <label>پست<select required value={prospectPosition} onChange={(event) => setProspectPosition(event.target.value)}><option value="GK">دروازه‌بان</option><option value="CB">مدافع میانی</option><option value="LB">مدافع چپ</option><option value="RB">مدافع راست</option><option value="DM">هافبک دفاعی</option><option value="CM">هافبک میانی</option><option value="AM">هافبک هجومی</option><option value="LW">وینگر چپ</option><option value="RW">وینگر راست</option><option value="ST">مهاجم</option></select></label>
                 <label>پتانسیل (۱ تا ۱۰۰)<input required type="number" min={1} max={100} value={prospectPotential} onChange={(event) => setProspectPotential(Number(event.target.value))} /></label>
                 <button type="submit" disabled={academyBusy}>{academyBusy ? "در حال ثبت…" : "افزودن به آکادمی"}</button>
               </form>
@@ -243,7 +243,7 @@ export default function HomePage() {
         label { display: grid; gap: 8px; font-size: 14px; }
         label span { color: #9aabc0; font-weight: normal; }
         input { width: 100%; background: #0b1422; border: 1px solid #34465f; border-radius: 12px; padding: 13px 14px; color: #fff; font: inherit; }
-        input:focus { outline: 2px solid #478ce6; border-color: transparent; }
+        select { width: 100%; background: #0b1422; border: 1px solid #34465f; border-radius: 12px; padding: 10px; color: #fff; font: inherit; }\n        input:focus { outline: 2px solid #478ce6; border-color: transparent; }
         button { margin-top: 6px; padding: 14px; border: 0; border-radius: 12px; background: #3478db; color: white; font: inherit; font-weight: bold; cursor: pointer; }
         button:disabled { opacity: .6; cursor: wait; }
         .notice { background: #253247; border-radius: 10px; padding: 12px; line-height: 1.7; }
