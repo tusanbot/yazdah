@@ -18,7 +18,7 @@ from public.group_economies
 on conflict(telegram_chat_id,idempotency_key) do nothing;
 
 create or replace function public.ensure_group_economy()
-returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_balance bigint;
 begin
   insert into public.group_economies(telegram_chat_id) values(new.telegram_chat_id)
@@ -69,7 +69,7 @@ end;
 $$;
 
 create or replace function public.cancel_group_game(p_game_id uuid,p_actor_user_id uuid)
-returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare g public.group_games%rowtype; p record; v_balance bigint; v_treasury bigint; v_refunded integer:=0;
 begin
   select * into g from public.group_games where id=p_game_id for update;
