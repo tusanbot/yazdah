@@ -927,6 +927,24 @@ app.post<{ Body: { action?: string; telegramUserId?: number; telegramChatId?: nu
   return { accepted: true, matchId: data };
 });
 
+app.get("/clubs/me/group-challenges", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("group_challenges")
+    .select("id,telegram_chat_id,challenger_club_id,opponent_club_id,match_id,requested_kickoff_at,status,created_at")
+    .or(`challenger_club_id.eq.${clubId},opponent_club_id.eq.${clubId}`)
+    .order("created_at", { ascending: false }).limit(50);
+  if (error) {
+    request.log.error({ err: error }, "group challenges list failed");
+    return reply.code(500).send({ error: "group_challenges_list_failed" });
+  }
+  return { challenges: data ?? [] };
+});
+
 app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?: string } }>("/clubs/me/group-challenges", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
