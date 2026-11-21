@@ -48,7 +48,7 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState<AuthResult | null>(null);
   const [clubId, setClubId] = useState("");
-  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);
+  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);\n  const [tactics, setTactics] = useState({ formation: "4-3-3", mentality: "balanced", tempo: "normal", pressing: "standard" });\n  const [tacticsStatus, setTacticsStatus] = useState("");
   const [prospects, setProspects] = useState<AcademyProspect[]>([]);
   const [academyBusy, setAcademyBusy] = useState(false);
   const [academyStatus, setAcademyStatus] = useState("");
@@ -128,7 +128,7 @@ export default function HomePage() {
       });
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
-      setClubProfile(profileBody.club as ClubProfile);
+      setClubProfile(profileBody.club as ClubProfile);\n      setTactics(profileBody.club.tactics);
       await loadPlayers(auth.accessToken);
       await loadTrainingPlan(auth.accessToken);
       await loadMatches(auth.accessToken);
@@ -186,6 +186,21 @@ export default function HomePage() {
     } finally {
       setMatchBusyId("");
     }
+  }
+
+  async function saveTactics() {
+    if (!session) return;
+    setTacticsStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/tactics`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify(tactics),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ذخیره تاکتیک ناموفق بود.");
+      setTactics(body.tactics);
+      setTacticsStatus("تاکتیک‌ها ذخیره شد و در مسابقات بعدی اعمال می‌شود.");
+    } catch (error) { setTacticsStatus(error instanceof Error ? error.message : "ذخیره تاکتیک ناموفق بود."); }
   }
 
   async function loadTrainingPlan(accessToken: string) {
@@ -444,7 +459,23 @@ export default function HomePage() {
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
-            <p>مرحله بعدی: تکمیل پروفایل، لوگو و ترکیب اولیه.</p>
+            <section className="training-plan" aria-labelledby="tactics-heading">
+              <h2 id="tactics-heading">تاکتیک مسابقه</h2>
+              <label>آرایش<select value={tactics.formation} onChange={(event) => setTactics((value) => ({ ...value, formation: event.target.value }))}>
+                <option value="4-3-3">۴-۳-۳</option><option value="4-4-2">۴-۴-۲</option><option value="4-2-3-1">۴-۲-۳-۱</option><option value="3-5-2">۳-۵-۲</option><option value="5-3-2">۵-۳-۲</option>
+              </select></label>
+              <label>ذهنیت<select value={tactics.mentality} onChange={(event) => setTactics((value) => ({ ...value, mentality: event.target.value }))}>
+                <option value="very_defensive">بسیار دفاعی</option><option value="defensive">دفاعی</option><option value="balanced">متعادل</option><option value="attacking">تهاجمی</option><option value="very_attacking">بسیار تهاجمی</option>
+              </select></label>
+              <label>سرعت بازی<select value={tactics.tempo} onChange={(event) => setTactics((value) => ({ ...value, tempo: event.target.value }))}>
+                <option value="slow">آهسته</option><option value="normal">عادی</option><option value="fast">سریع</option>
+              </select></label>
+              <label>پرس<select value={tactics.pressing} onChange={(event) => setTactics((value) => ({ ...value, pressing: event.target.value }))}>
+                <option value="low">کم</option><option value="standard">معمولی</option><option value="high">فشار بالا</option>
+              </select></label>
+              <button type="button" onClick={saveTactics}>ذخیره تاکتیک</button>
+              {tacticsStatus && <p className="notice" role="status">{tacticsStatus}</p>}
+            </section>
             <section className="academy" aria-labelledby="squad-heading">
               <h2 id="squad-heading">فهرست بازیکنان</h2>
               <p className="muted">بازیکنان تحت قرارداد باشگاه؛ بازیکنانی که از آکادمی ارتقا می‌یابند در این فهرست دیده می‌شوند.</p>
