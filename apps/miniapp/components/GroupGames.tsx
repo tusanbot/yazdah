@@ -166,6 +166,20 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     }
   }
 
+  async function cancelGame(gameId: string) {
+    setBusy(true);
+    try {
+      await post(`/groups/${encodeURIComponent(chatId)}/games/${gameId}/cancel`, {});
+      setDetail(null);
+      await loadOverview();
+      setStatus("چالش لغو شد و ورودی شرکت‌کنندگان بازگردانده شد.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "لغو چالش ناموفق بود.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startGame(gameId: string) {
     setBusy(true);
     try {
@@ -289,6 +303,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               ) : detail.isCreator ? (
                 <button type="button" disabled={busy || detail.participants.length < 2} onClick={() => void startGame(detail.game.id)}>شروع چالش</button>
               ) : <p>منتظر شروع چالش توسط سازنده بمان.</p>}
+              {detail.isCreator && <button type="button" className="cancel" disabled={busy} onClick={() => void cancelGame(detail.game.id)}>لغو چالش و بازگرداندن ورودی‌ها</button>}
             </div>
           )}
 
@@ -443,6 +458,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
         .game-row button,.mission-row button { flex-shrink:0; }
         .game-detail { margin-top:16px; border-top:1px solid #34465f; padding-top:14px; }
         .back { background:#34465f; margin-bottom:12px; }
+        .cancel { width:100%; margin-top:10px; background:#8b3941; }
         .timer { color:#ffd166; font-weight:bold; }
         .participants { display:grid; gap:8px; margin:12px 0; }
         .participant { align-items:flex-start; flex-direction:column; }
