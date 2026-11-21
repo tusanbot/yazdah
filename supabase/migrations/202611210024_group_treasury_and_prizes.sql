@@ -29,7 +29,7 @@ begin
     on conflict(telegram_chat_id,idempotency_key) do nothing;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.create_group_game(
   p_chat_id bigint,p_creator_user_id uuid,p_game_type text,p_entry_fee bigint,p_max_participants integer,p_title text
@@ -96,7 +96,7 @@ begin
     where id=p_game_id;
   return jsonb_build_object('cancelled',true,'refundedParticipants',v_refunded);
 end;
-$;
+$$;
 
 create or replace function public.settle_group_game_prize(p_game_id uuid,p_winners uuid[])
 returns void language plpgsql security definer set search_path=public,pg_temp as $$
