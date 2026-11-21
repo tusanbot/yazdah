@@ -283,7 +283,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             {detail.participants.map((participant) => (
               <div className="participant" key={participant.user_id}>
                 <strong>{participant.isMe ? "باشگاه شما" : `شرکت‌کننده ${detail.participants.findIndex((p) => p.user_id === participant.user_id) + 1}`}</strong>
-                <span>{participant.score.toLocaleString("fa-IR")} امتیاز · {formationLabels[participant.formation] ?? participant.formation}</span>
+                <span>{participant.score.toLocaleString("fa-IR")} امتیاز · {formationLabels[participant.formation] ?? participant.formation} · {participant.status === "eliminated" ? "حذف‌شده" : participant.status === "winner" ? "برنده" : participant.status === "completed" ? "پایان‌یافته" : "در رقابت"}</span>
                 {participant.picks?.length > 0 && <small>{participant.picks.map((p) => p.full_name).join("، ")}</small>}
               </div>
             ))}
@@ -325,7 +325,20 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
                   </div>
                 </div>
               ))}
-              {detail.game.state.resolvedLineups && <pre className="lineups">{JSON.stringify(detail.game.state.resolvedLineups, null, 2)}</pre>}
+              {detail.game.state.resolvedLineups && (
+                <div className="resolved-lineups">
+                  <h4>ترکیب نهایی پس از تطبیق با آرایش</h4>
+                  {Object.entries(detail.game.state.resolvedLineups).map(([userId, lineup]: [string, any]) => (
+                    <div className="participant" key={userId}>
+                      <strong>{userId === detail.currentUserId ? "ترکیب شما" : "ترکیب حریف"}</strong>
+                      <span>دروازه‌بان: {lineup.goalkeeper?.full_name ?? "—"}</span>
+                      {(lineup.fieldPlayers ?? []).map((player: any) => (
+                        <span key={player.id}>{positionLabels[player.assignedLine] ?? player.assignedLine}: {player.full_name} · قدرت {player.overall}</span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -471,6 +484,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
         .choice-row,.answers { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
         .answers { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .refresh { width:100%; background:#34465f; }
+        .resolved-lineups { display:grid; gap:10px; margin-top:14px; }
         .lineups { white-space:pre-wrap; overflow-wrap:anywhere; color:#c5d5ea; }
         @media(max-width:520px) { .group-head,.group-connect { flex-direction:column; align-items:stretch; } .wallet { width:100%; } .game-row,.mission-row { align-items:stretch; flex-direction:column; } .card-grid { grid-template-columns:1fr 1fr; } }
       `}</style>
