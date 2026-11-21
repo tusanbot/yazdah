@@ -305,6 +305,26 @@ async function ownedClubId(userId: string): Promise<string | null> {
   return data?.club_id ?? null;
 }
 
+app.get<{ Querystring: { class?: string } }>("/players/catalog", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  const playerClass = request.query.class;
+  if (playerClass !== undefined && !["professional", "special"].includes(playerClass)) {
+    return reply.code(400).send({ error: "player_catalog_class_invalid" });
+  }
+  let query = supabase.from("player_catalog")
+    .select("id, full_name, birth_date, nationality_code, position, player_class, special_tier, overall, potential, release_clause, weekly_wage")
+    .eq("active", true);
+  if (playerClass) query = query.eq("player_class", playerClass);
+  const { data, error } = await query.order("overall", { ascending: false }).order("full_name", { ascending: true }).limit(200);
+  if (error) {
+    request.log.error({ err: error }, "player catalog lookup failed");
+    return reply.code(500).send({ error: "player_catalog_load_failed" });
+  }
+  return { players: data ?? [] };
+});
+
 app.get("/clubs/me/players", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
