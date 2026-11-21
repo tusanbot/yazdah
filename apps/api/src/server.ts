@@ -358,6 +358,82 @@ app.post<{ Body: { fullName?: string; birthDate?: string; position?: string; pot
   return reply.code(201).send({ prospectId: data });
 });
 
+app.get("/clubs/me/staff", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("club_staff")
+    .select("id, full_name, staff_role, specialty, skill, weekly_wage, contract_until, hired_at, released_at")
+    .eq("club_id", clubId).order("hired_at", { ascending: false }).limit(100);
+  if (error) {
+    request.log.error({ err: error }, "staff lookup failed");
+    return reply.code(500).send({ error: "staff_load_failed" });
+  }
+  return { staff: data ?? [] };
+});
+
+app.post<{ Body: { fullName?: string; staffRole?: string; specialty?: string; skill?: number; weeklyWage?: number; contractUntil?: string; idempotencyKey?: string } }>("/clubs/me/staff", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { fullName, staffRole, specialty, skill, weeklyWage, contractUntil, idempotencyKey } = request.body ?? {};
+  if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 80 ||
+      typeof staffRole !== "string" || !["coach","technical","medical","fitness","transfer_director"].includes(staffRole) ||
+      (specialty !== undefined && (typeof specialty !== "string" || specialty.length > 80)) ||
+      !Number.isInteger(skill) || skill! < 1 || skill! > 100 ||
+      !Number.isSafeInteger(weeklyWage) || weeklyWage! < 0 || weeklyWage! > 100000000 ||
+      typeof contractUntil !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(contractUntil) ||
+      typeof idempotencyKey !== "string" || idempotencyKey.length < 1 || idempotencyKey.length > 160) {
+    return reply.code(400).send({ error: "staff_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("hire_club_staff", {
+    p_club_id: clubId, p_full_name: fullName.trim(), p_staff_role: staffRole,
+    p_specialty: specialty ?? null, p_skill: skill, p_weekly_wage: weeklyWage,
+    p_contract_until: contractUntil, p_idempotency_key: idempotencyKey,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: error.message === "insufficient_funds" ? "insufficient_funds" : "staff_input_invalid" });
+    request.log.error({ err: error }, "staff hiring failed");
+    return reply.code(500).send({ error: "staff_hiring_failed" });
+  }
+  return reply.code(201).send({ staffId: data });
+});
+
+app.post<{ Body: { staffId?: string } }>("/clubs/me/staff/release", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const staffId = request.body?.staffId;
+  if (typeof staffId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(staffId)) {
+    return reply.code(400).send({ error: "staff_id_invalid" });
+  }
+  const { data, error } = await supabase.rpc("release_club_staff", { p_club_id: clubId, p_staff_id: staffId });
+  if (error) {
+    request.log.error({ err: error }, "staff release failed");
+    return reply.code(500).send({ error: "staff_release_failed" });
+  }
+  if (!data) return reply.code(404).send({ error: "active_staff_not_found" });
+  return { released: true };
+});
+
 app.get("/clubs/me/academy", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
