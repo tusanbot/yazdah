@@ -27,6 +27,7 @@ type StaffMember = { id: string; full_name: string; staff_role: string; specialt
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubMission = { id: string; title: string; description: string; target_count: number; reward_coins: number; progress: number; claimedAt: string | null };
 type ClubUnion = { id: string; name: string; tag: string; leader_club_id: string; members?: { count: number }[] };
+type GroupChallenge = { id: string; telegram_chat_id: number; challenger_club_id: string; opponent_club_id: string; match_id: string | null; requested_kickoff_at: string; status: string; created_at: string };
 type ClubProfile = {
   id: string;
   name: string;
@@ -92,6 +93,12 @@ export default function HomePage() {
   const [unionName, setUnionName] = useState("");
   const [unionTag, setUnionTag] = useState("");
   const [unionJoinId, setUnionJoinId] = useState("");
+  const [groupChallenges, setGroupChallenges] = useState<GroupChallenge[]>([]);
+  const [groupChatId, setGroupChatId] = useState("");
+  const [opponentClubId, setOpponentClubId] = useState("");
+  const [challengeKickoff, setChallengeKickoff] = useState("");
+  const [challengeBusy, setChallengeBusy] = useState(false);
+  const [challengeStatus, setChallengeStatus] = useState("");
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -168,6 +175,10 @@ export default function HomePage() {
     if (!unionResponse.ok) throw new Error(unionBody.error ?? "بارگذاری اتحادیه‌ها ناموفق بود.");
     setMissions(missionBody.missions as ClubMission[]);
     setUnions(unionBody.unions as ClubUnion[]);
+    const challengeResponse = await fetch(`${API_URL}/clubs/me/group-challenges`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const challengeBody = await challengeResponse.json();
+    if (!challengeResponse.ok) throw new Error(challengeBody.error ?? "بارگذاری چالش‌های گروهی ناموفق بود.");
+    setGroupChallenges(challengeBody.challenges as GroupChallenge[]);
   }
 
   async function claimMission(missionId: string) {
@@ -218,6 +229,50 @@ export default function HomePage() {
       setCommunityStatus("باشگاه به اتحادیه پیوست.");
     } catch (error) { setCommunityStatus(error instanceof Error ? error.message : "پیوستن به اتحادیه ناموفق بود."); }
     finally { setCommunityBusy(false); }
+  }
+
+  async function createGroupChallenge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    const chatId = Number(groupChatId);
+    const kickoffAt = new Date(challengeKickoff).toISOString();
+    if (!Number.isSafeInteger(chatId) || !opponentClubId.trim()) {
+      setChallengeStatus("شناسه گروه و شناسه باشگاه حریف را بررسی کن.");
+      return;
+    }
+    setChallengeBusy(true); setChallengeStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/group-challenges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ telegramChatId: chatId, opponentClubId: opponentClubId.trim(), kickoffAt }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "telegram_group_not_linked" ? "ابتدا گروه تلگرام را با دستور /group به بازی متصل کن." : body.error ?? "ساخت چالش ناموفق بود.");
+      setOpponentClubId(""); setChallengeKickoff("");
+      await loadCommunity(session.accessToken);
+      setChallengeStatus(`چالش ساخته شد؛ شناسه: ${body.challengeId}`);
+    } catch (error) {
+      setChallengeStatus(error instanceof Error ? error.message : "ساخت چالش ناموفق بود.");
+    } finally { setChallengeBusy(false); }
+  }
+
+  async function acceptGroupChallenge(challenge: GroupChallenge) {
+    if (!session) return;
+    setChallengeBusy(true); setChallengeStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/group-challenges/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ challengeId: challenge.id, kickoffAt: challenge.requested_kickoff_at }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "پذیرش چالش ناموفق بود.");
+      await loadCommunity(session.accessToken);
+      setChallengeStatus(`چالش پذیرفته شد؛ شناسه مسابقه: ${body.matchId}`);
+    } catch (error) {
+      setChallengeStatus(error instanceof Error ? error.message : "پذیرش چالش ناموفق بود.");
+    } finally { setChallengeBusy(false); }
   }
 
   async function loadMatches(accessToken: string) {
@@ -560,6 +615,28 @@ export default function HomePage() {
                 <label>نشان لاتین (۲ تا ۶ حرف/عدد)<input required minLength={2} maxLength={6} pattern="[A-Za-z0-9]{2,6}" value={unionTag} onChange={(event) => setUnionTag(event.target.value.toUpperCase())} /></label>
                 <button type="submit" disabled={communityBusy}>ایجاد اتحادیه</button>
               </form>
+              <section className="training-plan" aria-labelledby="group-challenges-heading">
+                <h3 id="group-challenges-heading">چالش‌های گروهی</h3>
+                <p className="muted">برای ایجاد چالش، گروه باید قبلاً با دستور /group متصل شده باشد. شناسه گروه تلگرام و شناسه باشگاه حریف را وارد کن.</p>
+                <form className="recruit-form" onSubmit={createGroupChallenge}>
+                  <label>شناسه عددی گروه تلگرام<input required inputMode="numeric" value={groupChatId} onChange={(event) => setGroupChatId(event.target.value)} /></label>
+                  <label>شناسه UUID باشگاه حریف<input required value={opponentClubId} onChange={(event) => setOpponentClubId(event.target.value)} /></label>
+                  <label>زمان شروع مسابقه<input required type="datetime-local" value={challengeKickoff} onChange={(event) => setChallengeKickoff(event.target.value)} /></label>
+                  <button type="submit" disabled={challengeBusy}>ایجاد چالش</button>
+                </form>
+                {groupChallenges.length === 0 ? <p className="muted">چالشی برای باشگاهت ثبت نشده است.</p> : <div className="prospects">
+                  {groupChallenges.map((challenge) => <article className="prospect" key={challenge.id}>
+                    <div>
+                      <strong>{challenge.status === "pending" ? "در انتظار پاسخ" : challenge.status === "accepted" ? "پذیرفته‌شده" : challenge.status}</strong>
+                      <p>حریف: {challenge.challenger_club_id === clubId ? challenge.opponent_club_id : challenge.challenger_club_id}</p>
+                      <small>گروه: {challenge.telegram_chat_id} · زمان: {new Date(challenge.requested_kickoff_at).toLocaleString("fa-IR")}</small>
+                      <small>شناسه چالش: {challenge.id}</small>
+                    </div>
+                    {challenge.status === "pending" && challenge.opponent_club_id === clubId && <button type="button" disabled={challengeBusy} onClick={() => acceptGroupChallenge(challenge)}>پذیرش چالش</button>}
+                  </article>)}
+                </div>}
+                {challengeStatus && <p className="notice" role="status">{challengeStatus}</p>}
+              </section>
               {communityStatus && <p className="notice" role="status">{communityStatus}</p>}
             </section>
             <section className="training-plan" aria-labelledby="tactics-heading">
