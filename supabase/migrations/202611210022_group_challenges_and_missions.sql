@@ -555,6 +555,8 @@ revoke all on public.group_economies,public.group_wallets,public.group_currency_
   public.group_quiz_questions,public.group_games,public.group_game_participants,public.group_mission_definitions,
   public.group_mission_progress,public.group_mission_events,public.group_mission_claims from public,anon,authenticated;
 
+revoke all on function public.settle_group_game_prize(uuid,uuid[]) from public,anon,authenticated;
+grant execute on function public.settle_group_game_prize(uuid,uuid[]) to service_role;
 revoke all on function public.group_wallet_change(bigint,uuid,bigint,text,text) from public,anon,authenticated;
 revoke all on function public.record_group_mission_event(bigint,uuid,text,text) from public,anon,authenticated;
 revoke all on function public.create_group_game(bigint,uuid,text,bigint,integer,text) from public,anon,authenticated;
