@@ -28,6 +28,12 @@ type AcademyProspect = { id: string; full_name: string; birth_date: string; posi
 type ClubMission = { id: string; title: string; description: string; target_count: number; reward_coins: number; progress: number; claimedAt: string | null };
 type ClubUnion = { id: string; name: string; tag: string; leader_club_id: string; members?: { count: number }[] };
 type GroupChallenge = { id: string; telegram_chat_id: number; challenger_club_id: string; opponent_club_id: string; match_id: string | null; requested_kickoff_at: string; status: string; created_at: string };
+type AdminOverview = {
+  role: string;
+  stats: { users: number; clubs: number; matches: number; notificationsPending: number; notificationsFailed: number };
+  recentAudit: { id: string; action: string; target_type: string; target_id: string | null; created_at: string }[];
+  failedNotifications: { id: string; match_id: string; telegram_user_id: number | string; attempts: number; last_error: string | null; created_at: string }[];
+};
 type ClubProfile = {
   id: string;
   name: string;
@@ -99,6 +105,9 @@ export default function HomePage() {
   const [challengeKickoff, setChallengeKickoff] = useState("");
   const [challengeBusy, setChallengeBusy] = useState(false);
   const [challengeStatus, setChallengeStatus] = useState("");
+  const [adminOverview, setAdminOverview] = useState<AdminOverview | null>(null);
+  const [adminStatus, setAdminStatus] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -156,12 +165,37 @@ export default function HomePage() {
       await loadAcademy(auth.accessToken);
       await loadStaff(auth.accessToken);
       await loadCommunity(auth.accessToken);
+      await loadAdminOverview(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadAdminOverview(accessToken: string) {
+    const response = await fetch(`${API_URL}/admin/overview`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (response.status === 403) { setAdminOverview(null); return; }
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری پنل مدیریت ناموفق بود.");
+    setAdminOverview(body as AdminOverview);
+  }
+
+  async function retryAdminNotification(notificationId: string) {
+    if (!session) return;
+    setAdminBusy(true); setAdminStatus("");
+    try {
+      const response = await fetch(`${API_URL}/admin/notifications/${notificationId}/retry`, {
+        method: "POST", headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "تلاش مجدد اعلان ناموفق بود.");
+      await loadAdminOverview(session.accessToken);
+      setAdminStatus("اعلان به صف ارسال بازگردانده شد.");
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : "عملیات ناموفق بود.");
+    } finally { setAdminBusy(false); }
   }
 
   async function loadCommunity(accessToken: string) {
@@ -590,6 +624,29 @@ export default function HomePage() {
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
+            {adminOverview && <section className="training-plan" aria-labelledby="admin-heading">
+              <h2 id="admin-heading">پنل مدیریت یازده</h2>
+              <p className="muted">سطح دسترسی: {adminOverview.role === "super_admin" ? "مدیر ارشد" : "مدیر"}</p>
+              <div className="prospects">
+                <article className="prospect"><strong>کاربران</strong><span>{adminOverview.stats.users.toLocaleString("fa-IR")}</span></article>
+                <article className="prospect"><strong>باشگاه‌ها</strong><span>{adminOverview.stats.clubs.toLocaleString("fa-IR")}</span></article>
+                <article className="prospect"><strong>مسابقات</strong><span>{adminOverview.stats.matches.toLocaleString("fa-IR")}</span></article>
+                <article className="prospect"><strong>اعلان‌های در صف</strong><span>{adminOverview.stats.notificationsPending.toLocaleString("fa-IR")}</span></article>
+                <article className="prospect"><strong>اعلان‌های ناموفق</strong><span>{adminOverview.stats.notificationsFailed.toLocaleString("fa-IR")}</span></article>
+              </div>
+              <h3>اعلان‌های ناموفق تلگرام</h3>
+              {adminOverview.failedNotifications.length === 0 ? <p className="muted">اعلان ناموفقی وجود ندارد.</p> : <div className="prospects">
+                {adminOverview.failedNotifications.map((item) => <article className="prospect" key={item.id}>
+                  <div><strong>مسابقه: {item.match_id}</strong><small>کاربر تلگرام: {item.telegram_user_id} · تلاش‌ها: {item.attempts}</small><small>{item.last_error ?? "بدون جزئیات خطا"}</small></div>
+                  <button type="button" disabled={adminBusy} onClick={() => retryAdminNotification(item.id)}>ارسال مجدد</button>
+                </article>)}
+              </div>}
+              <h3>آخرین اقدامات مدیریتی</h3>
+              {adminOverview.recentAudit.length === 0 ? <p className="muted">هنوز اقدامی ثبت نشده است.</p> : <ul>
+                {adminOverview.recentAudit.map((item) => <li key={item.id}>{item.action} · {item.target_type} · {new Date(item.created_at).toLocaleString("fa-IR")}</li>)}
+              </ul>}
+              {adminStatus && <p className="notice" role="status">{adminStatus}</p>}
+            </section>}
             <section className="academy" aria-labelledby="community-heading">
               <h2 id="community-heading">مأموریت‌ها و اتحادیه‌ها</h2>
               <h3>مأموریت‌های باشگاه</h3>
