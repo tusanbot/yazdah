@@ -18,6 +18,8 @@ type AuthResult = {
   accessToken: string;
   user: { id: string; first_name: string; username?: string | null };
 };
+type MarketListing = { id: string; asking_price: number; listed_at: string; player: { id: string; full_name: string; position: string; overall: number; potential: number; nationality_code: string | null }; seller: { id: string; name: string; slug: string } };
+type OwnListing = { id: string; player_id: string; asking_price: number; status: string };
 type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
@@ -53,6 +55,11 @@ export default function HomePage() {
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [marketListings, setMarketListings] = useState<MarketListing[]>([]);
+  const [ownListings, setOwnListings] = useState<OwnListing[]>([]);
+  const [marketPrices, setMarketPrices] = useState<Record<string, string>>({});
+  const [marketBusy, setMarketBusy] = useState(false);
+  const [marketStatus, setMarketStatus] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [lineupStatus, setLineupStatus] = useState("");
   const [lineupBusy, setLineupBusy] = useState(false);
@@ -113,6 +120,8 @@ export default function HomePage() {
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
       await loadPlayers(auth.accessToken);
+      await loadMarket(auth.accessToken);
+      await loadOwnListings(auth.accessToken);
       await loadAcademy(auth.accessToken);
       await loadStaff(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
@@ -132,6 +141,70 @@ export default function HomePage() {
     setSelectedPlayerIds(roster.filter((player) => player.squad_slot?.[0]).sort((a, b) => (a.squad_slot?.[0]?.slot_no ?? 99) - (b.squad_slot?.[0]?.slot_no ?? 99)).map((player) => player.id));
   }
 
+  async function loadMarket(accessToken: string) {
+    const response = await fetch(API_URL + "/market", { headers: { Authorization: "Bearer " + accessToken } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری بازار ناموفق بود.");
+    setMarketListings(body.listings as MarketListing[]);
+  }
+
+  async function loadOwnListings(accessToken: string) {
+    const response = await fetch(API_URL + "/clubs/me/transfer-listings", { headers: { Authorization: "Bearer " + accessToken } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری آگهی‌های باشگاه ناموفق بود.");
+    setOwnListings(body.listings as OwnListing[]);
+  }
+
+  async function listPlayer(playerId: string) {
+    if (!session) return;
+    const askingPrice = Number(marketPrices[playerId]);
+    if (!Number.isSafeInteger(askingPrice) || askingPrice < 1) { setMarketStatus("قیمت فروش باید عدد صحیح مثبت باشد."); return; }
+    setMarketBusy(true); setMarketStatus("");
+    try {
+      const response = await fetch(API_URL + "/clubs/me/transfer-listings", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.accessToken },
+        body: JSON.stringify({ playerId, askingPrice }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "transfer_already_listed" ? "این بازیکن از قبل در بازار است." : body.error ?? "ثبت آگهی ناموفق بود.");
+      await Promise.all([loadPlayers(session.accessToken), loadMarket(session.accessToken), loadOwnListings(session.accessToken)]);
+      setMarketPrices((prices) => ({ ...prices, [playerId]: "" }));
+      setMarketStatus("بازیکن با موفقیت در بازار قرار گرفت؛ از ترکیب اصلی خارج شد.");
+    } catch (error) { setMarketStatus(error instanceof Error ? error.message : "ثبت آگهی ناموفق بود."); }
+    finally { setMarketBusy(false); }
+  }
+
+  async function buyListing(listingId: string) {
+    if (!session) return;
+    setMarketBusy(true); setMarketStatus("");
+    try {
+      const response = await fetch(API_URL + "/market/buy", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.accessToken },
+        body: JSON.stringify({ listingId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "insufficient_funds" ? "موجودی باشگاه برای خرید کافی نیست." : body.error ?? "خرید بازیکن ناموفق بود.");
+      await Promise.all([loadPlayers(session.accessToken), loadMarket(session.accessToken), loadOwnListings(session.accessToken)]);
+      setMarketStatus("خرید بازیکن با موفقیت انجام شد.");
+    } catch (error) { setMarketStatus(error instanceof Error ? error.message : "خرید بازیکن ناموفق بود."); }
+    finally { setMarketBusy(false); }
+  }
+
+  async function withdrawListing(listingId: string) {
+    if (!session) return;
+    setMarketBusy(true); setMarketStatus("");
+    try {
+      const response = await fetch(API_URL + "/clubs/me/transfer-listings/withdraw", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.accessToken },
+        body: JSON.stringify({ listingId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "برداشتن آگهی ناموفق بود.");
+      await Promise.all([loadPlayers(session.accessToken), loadMarket(session.accessToken), loadOwnListings(session.accessToken)]);
+      setMarketStatus("آگهی از بازار برداشته شد.");
+    } catch (error) { setMarketStatus(error instanceof Error ? error.message : "برداشتن آگهی ناموفق بود."); }
+    finally { setMarketBusy(false); }
+  }
   async function saveLineup() {
     if (!session || selectedPlayerIds.length !== 11) return;
     setLineupBusy(true);
@@ -288,6 +361,17 @@ export default function HomePage() {
               <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
               <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
               {lineupStatus && <p className="notice" role="status">{lineupStatus}</p>}
+            </section>
+            <section className="academy" aria-labelledby="market-heading">
+              <h2 id="market-heading">بازار نقل‌وانتقالات</h2>
+              <p className="muted">بازیکن بفروش یا با موجودی باشگاه بازیکن بخَر. خریدوفروش و تسویهٔ مالی در یک تراکنش انجام می‌شود.</p>
+              <h3>آگهی‌های باشگاه</h3>
+              {ownListings.length === 0 ? <p className="muted">آگهی فعالی ندارید.</p> : <div className="prospects">{ownListings.map((listing) => { const player = players.find((item) => item.id === listing.player_id); return <article className="prospect" key={listing.id}><div><strong>{player?.full_name ?? "بازیکن"}</strong><p>قیمت درخواستی: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy} onClick={() => withdrawListing(listing.id)}>برداشتن آگهی</button></article>; })}</div>}
+              <h3>بازیکنان قابل فروش</h3>
+              {players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).length === 0 ? <p className="muted">بازیکن قابل فروش دیگری ندارید.</p> : <div className="prospects">{players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).map((player) => <article className="prospect" key={player.id}><div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p></div><label>قیمت فروش<input type="number" min={1} step={1} value={marketPrices[player.id] ?? ""} onChange={(event) => setMarketPrices((prices) => ({ ...prices, [player.id]: event.target.value }))} /></label><button type="button" disabled={marketBusy} onClick={() => listPlayer(player.id)}>ثبت آگهی</button></article>)}</div>}
+              <h3>آگهی‌های بازار</h3>
+              {marketListings.length === 0 ? <p className="muted">در حال حاضر آگهی فعالی وجود ندارد.</p> : <div className="prospects">{marketListings.map((listing) => <article className="prospect" key={listing.id}><div><strong>{listing.player.full_name}</strong><p>{listing.player.position} · قدرت {listing.player.overall} · پتانسیل {listing.player.potential}</p><small>باشگاه فروشنده: {listing.seller.name}</small><p>قیمت: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy || listing.seller.id === clubId} onClick={() => buyListing(listing.id)}>{listing.seller.id === clubId ? "آگهی شما" : "خرید بازیکن"}</button></article>)}</div>}
+              {marketStatus && <p className="notice" role="status">{marketStatus}</p>}
             </section>
             <section className="academy" aria-labelledby="staff-heading">
               <h2 id="staff-heading">مدیریت کادر فنی</h2>
