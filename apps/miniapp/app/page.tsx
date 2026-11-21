@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import GroupGames from "../components/GroupGames";
+import AdminSpecialPlayerTools from "../components/AdminSpecialPlayerTools";
 
 declare global {
   interface Window {
@@ -653,7 +654,8 @@ export default function HomePage() {
                 {adminOverview.recentAudit.map((item) => <li key={item.id}>{item.action} · {item.target_type} · {new Date(item.created_at).toLocaleString("fa-IR")}</li>)}
               </ul>}
               {adminStatus && <p className="notice" role="status">{adminStatus}</p>}
-            </section>}
+            </section>
+            <AdminSpecialPlayerTools apiUrl={API_URL} accessToken={session.accessToken} />}
             <section className="academy" aria-labelledby="community-heading">
               <h2 id="community-heading">مأموریت‌ها و اتحادیه‌ها</h2>
               <h3>مأموریت‌های باشگاه</h3>
