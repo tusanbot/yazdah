@@ -159,6 +159,12 @@ async function enqueueDueWork() {
   }
 }
 
+async function processExpiredGroupGames() {
+  const { data, error } = await supabase.rpc("process_expired_group_games", { p_limit: 50 });
+  if (error) throw new Error(`group_game_timeout_processing_failed:${error.message}`);
+  return Number(data ?? 0);
+}
+
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 
 async function deliverTelegramNotifications() {
@@ -226,9 +232,10 @@ while (!stopping) {
       await enqueueDueWork();
       lastScheduledAt = Date.now();
     }
+    const expiredGames = await processExpiredGroupGames();
     const notifications = await deliverTelegramNotifications();
     const found = await pollOnce();
-    if (!found && notifications === 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (!found && notifications === 0 && expiredGames === 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
   } catch (error) {
     console.error(JSON.stringify({ event: "worker_poll_error", error: error instanceof Error ? error.message : "unknown" }));
     await new Promise((resolve) => setTimeout(resolve, pollMs));
