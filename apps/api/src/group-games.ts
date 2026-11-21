@@ -55,6 +55,9 @@ function safeGameState(game: Record<string, any>, userId: string) {
     delete state.hands;
     delete state.deck;
     delete state.selected;
+  } else if (game.game_type === "penalty") {
+    state.myActionSubmitted = Boolean(state.actions?.[userId]);
+    delete state.actions;
   } else if (game.game_type === "draft") {
     const used = new Set(state.used ?? []);
     state.availablePools = Object.fromEntries(
@@ -252,7 +255,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       const map: Record<string, number> = { P0002: 404, "22023": 409, "42501": 403 };
       return reply.code(map[error.code] ?? 500).send({ error: error.message });
     }
-    return { started: true, state: safeGameState({ ...data, game_type: "draft" }, userId) };
+    return { started: true };
   });
 
   app.post<{ Params: { chatId: string; gameId: string }; Body: { cardId?: string } }>(
@@ -272,6 +275,34 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       });
       if (error) {
         const map: Record<string, number> = { "22023": 409, "42501": 403, P0002: 404 };
+        return reply.code(map[error.code] ?? 500).send({ error: error.message });
+      }
+      return data;
+    },
+  );
+
+  app.post<{ Params: { chatId: string; gameId: string }; Body: { choice?: string; answer?: number; guess?: string; clueLevel?: number; cardId?: string } }>(
+    "/groups/:chatId/games/:gameId/action", async (request, reply) => {
+      if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+      const userId = readSession(request.headers.authorization);
+      if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+      const chatId = parseChatId(request.params.chatId);
+      if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+      const { data: user } = await supabase.from("game_users").select("telegram_user_id").eq("id", userId).maybeSingle();
+      if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
+        return reply.code(403).send({ error: "telegram_group_membership_required" });
+      }
+      const action = request.body ?? {};
+      const { data, error } = await supabase.rpc("submit_group_game_action", {
+        p_game_id: request.params.gameId,
+        p_user_id: userId,
+        p_action: action,
+        p_auto: false,
+      });
+      if (error) {
+        const map: Record<string, number> = {
+          P0002: 404, "22023": 409, "23505": 409, "42501": 403,
+        };
         return reply.code(map[error.code] ?? 500).send({ error: error.message });
       }
       return data;
