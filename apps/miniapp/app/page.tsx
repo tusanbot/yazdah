@@ -18,6 +18,7 @@ type AuthResult = {
   accessToken: string;
   user: { id: string; first_name: string; username?: string | null };
 };
+type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubProfile = {
   id: string;
   name: string;
@@ -41,7 +42,7 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState<AuthResult | null>(null);
   const [clubId, setClubId] = useState("");
-  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);
+  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);\n  const [prospects, setProspects] = useState<AcademyProspect[]>([]);\n  const [academyBusy, setAcademyBusy] = useState(false);\n  const [academyStatus, setAcademyStatus] = useState("");
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -167,7 +168,7 @@ export default function HomePage() {
         button { margin-top: 6px; padding: 14px; border: 0; border-radius: 12px; background: #3478db; color: white; font: inherit; font-weight: bold; cursor: pointer; }
         button:disabled { opacity: .6; cursor: wait; }
         .notice { background: #253247; border-radius: 10px; padding: 12px; line-height: 1.7; }
-        .success { background: #163b32; border: 1px solid #28634f; border-radius: 14px; padding: 16px; overflow-wrap: anywhere; }
+        .academy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #28634f; }\n        .academy h2 { margin: 0 0 8px; }\n        .prospects { display: grid; gap: 10px; }\n        .prospect { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #34465f; border-radius: 12px; background: #101a29; }\n        .prospect p { margin: 6px 0; font-size: 13px; }\n        .prospect small { color: #a6b5c9; }\n        .prospect button { margin: 0; padding: 10px; font-size: 12px; flex-shrink: 0; }\n        .success { background: #163b32; border: 1px solid #28634f; border-radius: 14px; padding: 16px; overflow-wrap: anywhere; }
         code { font-size: 12px; }
         footer { border-top: 1px solid #263449; margin-top: 24px; padding-top: 16px; font-size: 12px; }
       `}</style>
