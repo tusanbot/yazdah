@@ -1,0 +1,17 @@
+{
+  "name": "yazdah",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yazdah football club management game for Telegram",
+  "packageManager": "pnpm@10.9.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @yazdah/api --filter @yazdah/bot --filter @yazdah/miniapp dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}
