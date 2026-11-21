@@ -149,20 +149,15 @@ app.post<{ Params: { id: string } }>("/admin/notifications/:id/retry", async (re
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(notificationId)) {
     return reply.code(400).send({ error: "notification_id_invalid" });
   }
-  const { data, error } = await supabase.from("telegram_notification_outbox")
-    .update({ status: "pending", available_at: new Date().toISOString(), locked_at: null, last_error: null })
-    .eq("id", notificationId).eq("status", "failed")
-    .select("id").maybeSingle();
-  if (error) return reply.code(500).send({ error: "notification_retry_failed" });
-  if (!data) return reply.code(409).send({ error: "notification_not_failed_or_not_found" });
-  const { error: auditError } = await supabase.from("admin_audit_log").insert({
-    actor_user_id: userId, action: "notification.retry", target_type: "telegram_notification",
-    target_id: notificationId, details: {},
+  const { data, error } = await supabase.rpc("admin_retry_telegram_notification", {
+    p_actor_user_id: userId, p_notification_id: notificationId,
   });
-  if (auditError) {
-    request.log.error({ err: auditError }, "admin audit write failed");
-    return reply.code(500).send({ error: "admin_audit_write_failed" });
+  if (error) {
+    if (error.code === "42501") return reply.code(403).send({ error: "admin_access_required" });
+    request.log.error({ err: error }, "admin notification retry failed");
+    return reply.code(500).send({ error: "notification_retry_failed" });
   }
+  if (!data) return reply.code(409).send({ error: "notification_not_failed_or_not_found" });
   return { retried: true, notificationId };
 });
 
