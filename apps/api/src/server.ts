@@ -210,6 +210,60 @@ app.get("/clubs/me/players", async (request, reply) => {
   return { players: data ?? [] };
 });
 
+app.post<{ Body: { playerId?: string; contractUntil?: string; weeklyWage?: number } }>("/clubs/me/players/renew-contract", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { playerId, contractUntil, weeklyWage } = request.body ?? {};
+  if (typeof playerId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(playerId) ||
+      typeof contractUntil !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(contractUntil) ||
+      !Number.isSafeInteger(weeklyWage) || weeklyWage! < 0 || weeklyWage! > 100000000) {
+    return reply.code(400).send({ error: "player_contract_input_invalid" });
+  }
+  const { error } = await supabase.rpc("renew_player_contract", {
+    p_club_id: clubId, p_player_id: playerId, p_contract_until: contractUntil, p_weekly_wage: weeklyWage,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "player_contract_input_invalid" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "player_not_owned" });
+    request.log.error({ err: error }, "player contract renewal failed");
+    return reply.code(500).send({ error: "player_contract_renewal_failed" });
+  }
+  return { renewed: true };
+});
+
+app.get("/clubs/me/training-plan", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("club_training_preferences").select("plan").eq("club_id", clubId).maybeSingle();
+  if (error) { request.log.error({ err: error }, "training plan lookup failed"); return reply.code(500).send({ error: "training_plan_load_failed" }); }
+  return { plan: data?.plan ?? "balanced" };
+});
+
+app.post<{ Body: { plan?: string } }>("/clubs/me/training-plan", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const plan = request.body?.plan;
+  if (typeof plan !== "string" || !["balanced","development","recovery"].includes(plan)) return reply.code(400).send({ error: "training_plan_invalid" });
+  const { error } = await supabase.rpc("set_club_training_plan", { p_club_id: clubId, p_plan: plan });
+  if (error) { request.log.error({ err: error }, "training plan update failed"); return reply.code(500).send({ error: "training_plan_update_failed" }); }
+  return { plan };
+});
+
 app.get("/market", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
