@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Props = { apiUrl: string; accessToken: string };
 type Pack = { pack_key: "epic" | "legendary" | "iconic"; title: string; price: number; active: boolean; updated_at?: string };
@@ -25,7 +25,7 @@ export default function AdminSpecialPlayerTools({ apiUrl, accessToken }: Props) 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
-  async function request(path: string, init: RequestInit = {}) {
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${apiUrl}${path}`, {
       ...init,
       headers: { Authorization: `Bearer ${accessToken}`, ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
@@ -33,9 +33,9 @@ export default function AdminSpecialPlayerTools({ apiUrl, accessToken }: Props) 
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "درخواست مدیریتی ناموفق بود.");
     return body;
-  }
+  }, [apiUrl, accessToken]);
 
-  async function load() {
+  const load = useCallback(async () => {
     const body = await request("/admin/special-player-tools");
     const nextPacks = body.packs as Pack[];
     setPacks(nextPacks);
@@ -45,12 +45,14 @@ export default function AdminSpecialPlayerTools({ apiUrl, accessToken }: Props) 
     setPackDrafts(Object.fromEntries(nextPacks.map((pack) => [pack.pack_key, {
       title: pack.title, price: String(pack.price), active: pack.active,
     }])));
-    if (!competitionId && body.competitions[0]) setCompetitionId(body.competitions[0].id);
-    if (!competitionPlayerId && body.players[0]) setCompetitionPlayerId(body.players[0].id);
-    if (!eventPlayerId && body.players[0]) setEventPlayerId(body.players[0].id);
-  }
+    if (body.competitions[0]) setCompetitionId((current) => current || body.competitions[0].id);
+    if (body.players[0]) {
+      setCompetitionPlayerId((current) => current || body.players[0].id);
+      setEventPlayerId((current) => current || body.players[0].id);
+    }
+  }, [request]);
 
-  useEffect(() => { load().catch((error) => setStatus(error instanceof Error ? error.message : "بارگذاری ناموفق بود.")); }, []);
+  useEffect(() => { load().catch((error) => setStatus(error instanceof Error ? error.message : "بارگذاری ناموفق بود.")); }, [load]);
 
   async function savePack(key: Pack["pack_key"]) {
     const draft = packDrafts[key];
