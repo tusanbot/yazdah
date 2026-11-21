@@ -2,6 +2,33 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+type GameCard = {
+  id: string;
+  full_name: string;
+  position_group?: string;
+  overall: number;
+  rarity: string;
+  nationality?: string;
+  assignedLine?: string;
+};
+type ResolvedLineup = {
+  goalkeeper: GameCard | null;
+  fieldPlayers: GameCard[];
+};
+type GameState = {
+  round?: number;
+  currentTurn?: string;
+  availablePools?: Record<string, GameCard[]>;
+  resolvedLineups?: Record<string, ResolvedLineup>;
+  myHand?: GameCard[];
+  myUsedCardIds?: string[];
+  mySelectionSubmitted?: boolean;
+  myActionSubmitted?: boolean;
+  myAnswerSubmitted?: boolean;
+  myRole?: "shooter" | "keeper";
+  currentQuestion?: { id: string; category: string; prompt: string; options: string[] } | null;
+  currentPlayer?: { clues: string[]; clueLevel: number; totalClues: number; round: number } | null;
+};
 type GroupGame = {
   id: string;
   game_type: "draft" | "penalty" | "cards" | "quiz" | "guess" | "survival";
@@ -14,10 +41,10 @@ type GroupGame = {
   current_round: number;
   deadline_at: string | null;
   winner_user_id: string | null;
-  participants: { user_id: string; score: number; status: string; formation: string }[];
-  isCreator: boolean;
+  participants?: { user_id: string; score: number; status: string; formation: string }[];
+  isCreator?: boolean;
+  state?: GameState;
 };
-type WalletTransaction = { id: string; amount: number; balance_after: number; reason: string; created_at: string };
 type Mission = {
   id: string;
   title: string;
@@ -30,9 +57,10 @@ type Mission = {
   claimedAt: string | null;
   periodKey: string;
 };
+type WalletTransaction = { id: string; amount: number; balance_after: number; reason: string; created_at: string };
 type GameDetail = {
-  game: GroupGame & { state: Record<string, any> };
-  participants: { user_id: string; club_id: string; formation: string; score: number; status: string; picks: any[]; isMe: boolean }[];
+  game: GroupGame & { state: GameState };
+  participants: { user_id: string; club_id: string; formation: string; score: number; status: string; picks: GameCard[]; isMe: boolean }[];
   isCreator: boolean;
   isParticipant: boolean;
   currentUserId: string;
@@ -315,9 +343,9 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
                 detail.game.current_round === 1 ? position === "goalkeeper" : position !== "goalkeeper"
               ).map(([position, cards]) => (
                 <div className="card-pool" key={position}>
-                  <h5>{positionLabels[position] ?? position} · {(cards as any[]).length} بازیکن باقی‌مانده</h5>
+                  <h5>{positionLabels[position] ?? position} · {cards.length} بازیکن باقی‌مانده</h5>
                   <div className="card-grid">
-                    {(cards as any[]).map((card) => (
+                    {cards.map((card) => (
                       <button type="button" className="player-card" key={card.id} disabled={busy || !myTurn} onClick={() => void draftPick(card.id)}>
                         <strong>{card.full_name}</strong><span>{card.overall} قدرت</span><small>{card.rarity === "mythic" ? "افسانه" : "اسطوره"} · {card.nationality}</small>
                       </button>
@@ -328,11 +356,11 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               {detail.game.state.resolvedLineups && (
                 <div className="resolved-lineups">
                   <h4>ترکیب نهایی پس از تطبیق با آرایش</h4>
-                  {Object.entries(detail.game.state.resolvedLineups).map(([userId, lineup]: [string, any]) => (
+                  {(Object.entries(detail.game.state.resolvedLineups) as Array<[string, ResolvedLineup]>).map(([userId, lineup]) => (
                     <div className="participant" key={userId}>
                       <strong>{userId === detail.currentUserId ? "ترکیب شما" : "ترکیب حریف"}</strong>
                       <span>دروازه‌بان: {lineup.goalkeeper?.full_name ?? "—"}</span>
-                      {(lineup.fieldPlayers ?? []).map((player: any) => (
+                      {(lineup.fieldPlayers ?? []).map((player) => (
                         <span key={player.id}>{positionLabels[player.assignedLine] ?? player.assignedLine}: {player.full_name} · قدرت {player.overall}</span>
                       ))}
                     </div>
@@ -344,7 +372,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
 
           {detail.game.status === "active" && detail.game.game_type === "cards" && (
             <div className="card-grid">
-              {(detail.game.state.myHand ?? []).map((card: any) => (
+              {(detail.game.state.myHand ?? []).map((card) => (
                 <button type="button" className="player-card" key={card.id} disabled={busy || detail.game.state.mySelectionSubmitted || detail.game.state.myUsedCardIds?.includes(card.id)} onClick={() => void submitAction({ cardId: card.id })}>
                   <strong>{card.full_name}</strong><span>{card.overall} قدرت</span><small>{card.rarity === "mythic" ? "افسانه" : "اسطوره"}</small>
                 </button>
