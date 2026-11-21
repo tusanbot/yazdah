@@ -17,7 +17,9 @@ function mainMenu() {
     .webApp("ورود به باشگاه", miniAppUrl)
     .row()
     .text("راهنما", "help")
-    .text("وضعیت سرویس", "status");
+    .text("وضعیت سرویس", "status")
+    .row()
+    .webApp("مدیریت باشگاه", miniAppUrl);
 }
 
 bot.command("start", async (ctx) => {
@@ -31,7 +33,7 @@ bot.command("menu", async (ctx) => {
   await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
 });
 
-bot.command("market", async (ctx) => {
+bot.command("club", async (ctx) => {\n  await ctx.reply("برای مدیریت باشگاه، ترکیب، تمرین، مسابقات و بازار، مینی‌اپ را باز کن.", {\n    reply_markup: new InlineKeyboard().webApp("ورود به باشگاه", miniAppUrl),\n  });\n});\n\nbot.command("missions", async (ctx) => {\n  await ctx.reply("مأموریت‌ها و پاداش‌های باشگاه از بخش مدیریت باشگاه در مینی‌اپ قابل پیگیری‌اند.", {\n    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),\n  });\n});\n\nbot.command("union", async (ctx) => {\n  await ctx.reply("برای ایجاد یا پیوستن به اتحادیه و دیدن فهرست اتحادیه‌ها، مینی‌اپ را باز کن.", {\n    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),\n  });\n});\n\nbot.command("challenge", async (ctx) => {\n  if (ctx.chat.type === "private") {\n    await ctx.reply("چالش‌های گروهی از داخل گروه تلگرام و با اتصال گروه به بازی انجام می‌شوند.");\n    return;\n  }\n  await ctx.reply("برای ساخت یا پذیرش چالش گروهی، ابتدا باشگاهتان را در مینی‌اپ مدیریت کنید. اتصال گروه و انتخاب حریف باید توسط مدیر گروه انجام شود.", {\n    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),\n  });\n});\n\nbot.command("market", async (ctx) => {
   await ctx.reply("برای خریدوفروش بازیکنان، بازار نقل‌وانتقالات یازده را باز کن.", {
     reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", miniAppUrl),
   });
