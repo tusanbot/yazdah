@@ -176,7 +176,9 @@ bot.command("group", async (ctx) => {
     });
     const body = await response.json() as { error?: string; linked?: boolean };
     if (!response.ok) {
-      const message = body.error === "telegram_user_not_registered"
+      const message = body.error === "telegram_group_already_linked"
+        ? "این گروه قبلاً به حساب دیگری متصل شده است؛ برای جلوگیری از تغییر مالکیت، اتصال مجدد مجاز نیست."
+        : body.error === "telegram_user_not_registered"
         ? "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز، سپس دوباره /group را اجرا کن."
         : body.error === "club_required_before_group_link"
           ? "برای اتصال گروه، ابتدا باید باشگاهت را در مینی‌اپ ایجاد کنی."
