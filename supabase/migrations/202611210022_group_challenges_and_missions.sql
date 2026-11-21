@@ -416,6 +416,7 @@ begin
   if v_round>1 and v_card->>'position_group'='goalkeeper' then raise exception 'draft_field_player_required' using errcode='22023'; end if;
   v_picks:=coalesce(g.state->'picks'->(p_user_id::text),'[]'::jsonb)||jsonb_build_array(v_card);
   update public.group_game_participants set picks=v_picks where game_id=p_game_id and user_id=p_user_id;
+  perform public.record_group_mission_event(g.telegram_chat_id,p_user_id,'draft_pick','draft-pick:'||p_game_id||':'||p_user_id||':'||v_round);
   update public.group_games set state=jsonb_set(
     jsonb_set(state,array['picks',p_user_id::text],v_picks,true),
     '{used}',coalesce(state->'used','[]'::jsonb)||to_jsonb(v_card->>'id'),true
@@ -438,6 +439,7 @@ begin
       perform public.record_group_mission_event(g.telegram_chat_id,v_users[1],'game_completed','complete:'||p_game_id||':'||v_users[1]);
       perform public.record_group_mission_event(g.telegram_chat_id,v_users[2],'game_completed','complete:'||p_game_id||':'||v_users[2]);
       if v_winner is not null then perform public.record_group_mission_event(g.telegram_chat_id,v_winner,'game_won','win:'||p_game_id||':'||v_winner); end if;
+      perform public.record_group_mission_event(g.telegram_chat_id,v_users[1],'group_game_completed','group-complete:'||p_game_id);
       return jsonb_build_object('completed',true,'winner',v_winner,'scores',jsonb_build_object(v_users[1]::text,v_score1,v_users[2]::text,v_score2));
     end if;
     v_starter:=case when (g.state->>'roundStarter')::uuid=v_users[1] then v_users[2] else v_users[1] end;
