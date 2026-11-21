@@ -391,7 +391,7 @@ $$;
 
 create or replace function public.settle_group_game_prize(p_game_id uuid,p_winners uuid[])
 returns void language plpgsql security definer set search_path=public,pg_temp as $$
-declare g public.group_games%rowtype; v_count integer; v_share bigint; v_remainder bigint; v_user uuid; v_index integer:=0; v_winners uuid[];
+declare g public.group_games%rowtype; v_count integer; v_share bigint; v_remainder bigint; v_user uuid; v_index integer:=0; v_winners uuid[]; v_amount bigint;
 begin
   select * into g from public.group_games where id=p_game_id for update;
   if not found or g.state->>'prizeSettled'='true' or g.prize_pool<=0 then return; end if;
@@ -410,8 +410,11 @@ begin
   v_remainder:=g.prize_pool-(v_share*v_count);
   for v_user in select distinct x from unnest(v_winners) x where x is not null order by x loop
     v_index:=v_index+1;
-    perform public.group_wallet_change(g.telegram_chat_id,v_user,v_share+case when v_index=1 then v_remainder else 0 end,
-      'challenge_prize',p_game_id::text||':prize:'||v_user::text);
+    v_amount:=v_share+case when v_index=1 then v_remainder else 0 end;
+    if v_amount>0 then
+      perform public.group_wallet_change(g.telegram_chat_id,v_user,v_amount,
+        'challenge_prize',p_game_id::text||':prize:'||v_user::text);
+    end if;
   end loop;
   update public.group_games set state=jsonb_set(state,'{prizeSettled}','true'::jsonb,true) where id=p_game_id;
 end;
