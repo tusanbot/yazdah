@@ -865,6 +865,68 @@ app.post<{ Body: { unionId?: string } }>("/clubs/me/unions/join", async (request
   return { joined: true };
 });
 
+app.post<{ Body: { action?: string; telegramUserId?: number; telegramChatId?: number; opponentClubId?: string; challengeId?: string; kickoffAt?: string } }>("/internal/telegram-groups/challenge", async (request, reply) => {
+  if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "group_challenges_not_configured" });
+  const supplied = request.headers["x-bot-internal-secret"];
+  if (typeof supplied !== "string") return reply.code(401).send({ error: "bot_auth_required" });
+  const expected = Buffer.from(botInternalSecret);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return reply.code(401).send({ error: "bot_auth_invalid" });
+  const { action, telegramUserId, telegramChatId, opponentClubId, challengeId, kickoffAt } = request.body ?? {};
+  if (!Number.isSafeInteger(telegramUserId) || !Number.isSafeInteger(telegramChatId) || !["create","accept"].includes(action ?? "")) {
+    return reply.code(400).send({ error: "group_challenge_input_invalid" });
+  }
+  const { data: user, error: userError } = await supabase.from("game_users").select("id")
+    .eq("telegram_user_id", telegramUserId).maybeSingle();
+  if (userError) return reply.code(500).send({ error: "group_challenge_user_lookup_failed" });
+  if (!user) return reply.code(404).send({ error: "telegram_user_not_registered" });
+  const { data: group, error: groupError } = await supabase.from("telegram_game_groups")
+    .select("telegram_chat_id,linked_by_user_id").eq("telegram_chat_id", telegramChatId).maybeSingle();
+  if (groupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
+  if (!group) return reply.code(404).send({ error: "telegram_group_not_linked" });
+  if (group.linked_by_user_id !== user.id) return reply.code(403).send({ error: "telegram_group_owner_required" });
+  const { data: membership, error: membershipError } = await supabase.from("club_memberships")
+    .select("club_id").eq("user_id", user.id).eq("role", "owner").maybeSingle();
+  if (membershipError) return reply.code(500).send({ error: "club_lookup_failed" });
+  if (!membership) return reply.code(409).send({ error: "club_required_before_group_challenge" });
+  if (action === "create") {
+    if (typeof opponentClubId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(opponentClubId) ||
+        typeof kickoffAt !== "string" || !Number.isFinite(Date.parse(kickoffAt)) || Date.parse(kickoffAt) <= Date.now()) {
+      return reply.code(400).send({ error: "group_challenge_input_invalid" });
+    }
+    const { data, error } = await supabase.rpc("create_group_challenge", {
+      p_telegram_chat_id: telegramChatId, p_challenger_club_id: membership.club_id,
+      p_opponent_club_id: opponentClubId, p_kickoff_at: kickoffAt,
+    });
+    if (error) {
+      if (error.code === "22023") return reply.code(400).send({ error: "group_challenge_input_invalid" });
+      request.log.error({ err: error }, "group challenge creation failed");
+      return reply.code(500).send({ error: "group_challenge_create_failed" });
+    }
+    return reply.code(201).send({ challengeId: data });
+  }
+  if (typeof challengeId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(challengeId)) {
+    return reply.code(400).send({ error: "challenge_id_invalid" });
+  }
+  const { data: challenge, error: challengeError } = await supabase.from("group_challenges")
+    .select("id,telegram_chat_id,opponent_club_id,requested_kickoff_at,status")
+    .eq("id", challengeId).eq("telegram_chat_id", telegramChatId).maybeSingle();
+  if (challengeError) return reply.code(500).send({ error: "challenge_lookup_failed" });
+  if (!challenge) return reply.code(404).send({ error: "challenge_not_found" });
+  if (challenge.opponent_club_id !== membership.club_id) return reply.code(403).send({ error: "challenge_opponent_club_required" });
+  const { data, error } = await supabase.rpc("accept_group_challenge", {
+    p_challenge_id: challengeId, p_opponent_club_id: membership.club_id,
+    p_kickoff_at: challenge.requested_kickoff_at,
+  });
+  if (error) {
+    if (error.code === "P0002") return reply.code(404).send({ error: "challenge_not_found" });
+    if (error.code === "22023") return reply.code(409).send({ error: "challenge_not_available" });
+    request.log.error({ err: error }, "group challenge acceptance failed");
+    return reply.code(500).send({ error: "group_challenge_accept_failed" });
+  }
+  return { accepted: true, matchId: data };
+});
+
 app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?: string } }>("/clubs/me/group-challenges", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
