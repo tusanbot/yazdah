@@ -42,7 +42,10 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState<AuthResult | null>(null);
   const [clubId, setClubId] = useState("");
-  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);\n  const [prospects, setProspects] = useState<AcademyProspect[]>([]);\n  const [academyBusy, setAcademyBusy] = useState(false);\n  const [academyStatus, setAcademyStatus] = useState("");
+  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);
+  const [prospects, setProspects] = useState<AcademyProspect[]>([]);
+  const [academyBusy, setAcademyBusy] = useState(false);
+  const [academyStatus, setAcademyStatus] = useState("");
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -91,11 +94,40 @@ export default function HomePage() {
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
+      await loadAcademy(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadAcademy(accessToken: string) {
+    const response = await fetch(`${API_URL}/clubs/me/academy`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری آکادمی ناموفق بود.");
+    setProspects(body.prospects as AcademyProspect[]);
+  }
+
+  async function promoteProspect(prospectId: string) {
+    if (!session) return;
+    setAcademyBusy(true);
+    setAcademyStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/academy/promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ academyPlayerId: prospectId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ارتقای بازیکن ناموفق بود.");
+      setProspects((items) => items.map((item) => item.id === prospectId ? { ...item, status: "promoted" } : item));
+      setAcademyStatus("بازیکن با موفقیت به تیم اصلی منتقل شد.");
+    } catch (error) {
+      setAcademyStatus(error instanceof Error ? error.message : "خطای نامشخص در آکادمی.");
+    } finally {
+      setAcademyBusy(false);
     }
   }
 
@@ -119,6 +151,17 @@ export default function HomePage() {
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
             <p>مرحله بعدی: تکمیل پروفایل، لوگو و ترکیب اولیه.</p>
+            <section className="academy" aria-labelledby="academy-heading">
+              <h2 id="academy-heading">آکادمی باشگاه</h2>
+              <p className="muted">استعدادهای جوان را بررسی کن و بازیکنان آماده را به تیم اصلی ارتقا بده.</p>
+              {prospects.length === 0 ? <p className="muted">هنوز استعدادی در آکادمی ثبت نشده است.</p> : <div className="prospects">
+                {prospects.map((prospect) => <article className="prospect" key={prospect.id}>
+                  <div><strong>{prospect.full_name}</strong><p>{prospect.position} · پتانسیل {prospect.potential} · پیشرفت {prospect.development}</p><small>وضعیت: {prospect.status === "training" ? "در حال پرورش" : prospect.status === "promoted" ? "ارتقایافته" : "آزادشده"}</small></div>
+                  {prospect.status === "training" && <button type="button" disabled={academyBusy} onClick={() => promoteProspect(prospect.id)}>{academyBusy ? "در حال انتقال…" : "ارتقا به تیم اصلی"}</button>}
+                </article>)}
+              </div>}
+              {academyStatus && <p className="notice" role="status">{academyStatus}</p>}
+            </section>
           </div>
         ) : (
           <form onSubmit={submit}>
@@ -168,7 +211,21 @@ export default function HomePage() {
         button { margin-top: 6px; padding: 14px; border: 0; border-radius: 12px; background: #3478db; color: white; font: inherit; font-weight: bold; cursor: pointer; }
         button:disabled { opacity: .6; cursor: wait; }
         .notice { background: #253247; border-radius: 10px; padding: 12px; line-height: 1.7; }
-        .academy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #28634f; }\n        .academy h2 { margin: 0 0 8px; }\n        .prospects { display: grid; gap: 10px; }\n        .prospect { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #34465f; border-radius: 12px; background: #101a29; }\n        .prospect p { margin: 6px 0; font-size: 13px; }\n        .prospect small { color: #a6b5c9; }\n        .prospect button { margin: 0; padding: 10px; font-size: 12px; flex-shrink: 0; }\n        .success { background: #163b32; border: 1px solid #28634f; border-radius: 14px; padding: 16px; overflow-wrap: anywhere; }
+        .academy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #28634f; }
+        .academy h2 { margin: 0 0 8px; }
+        .prospects { display: grid; gap: 10px; }
+        .prospect { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #34465f; border-radius: 12px; background: #101a29; }
+        .prospect p { margin: 6px 0; font-size: 13px; }
+        .prospect small { color: #a6b5c9; }
+        .prospect button { margin: 0; padding: 10px; font-size: 12px; flex-shrink: 0; }
+        .academy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #28634f; }
+        .academy h2 { margin: 0 0 8px; }
+        .prospects { display: grid; gap: 10px; }
+        .prospect { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #34465f; border-radius: 12px; background: #101a29; }
+        .prospect p { margin: 6px 0; font-size: 13px; }
+        .prospect small { color: #a6b5c9; }
+        .prospect button { margin: 0; padding: 10px; font-size: 12px; flex-shrink: 0; }
+        .success { background: #163b32; border: 1px solid #28634f; border-radius: 14px; padding: 16px; overflow-wrap: anywhere; }
         code { font-size: 12px; }
         footer { border-top: 1px solid #263449; margin-top: 24px; padding-top: 16px; font-size: 12px; }
       `}</style>
