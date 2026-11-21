@@ -208,3 +208,29 @@ grant execute on function public.create_club_union(uuid,text,text) to service_ro
 grant execute on function public.join_club_union(uuid,uuid) to service_role;
 grant execute on function public.create_group_challenge(bigint,uuid,uuid,timestamptz) to service_role;
 grant execute on function public.accept_group_challenge(uuid,uuid,timestamptz) to service_role;
+
+create or replace function public.track_training_mission()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if new.training_applied=true and old.training_applied is distinct from true then
+   perform public.record_mission_progress(new.club_id,'training_applied','training:'||new.club_id||':'||new.state_date);
+ end if;
+ return new;
+end;
+$$;
+drop trigger if exists club_daily_state_track_training_mission on public.club_daily_state;
+create trigger club_daily_state_track_training_mission after update of training_applied on public.club_daily_state
+for each row execute function public.track_training_mission();
+
+create or replace function public.track_youth_promotion_mission()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if new.status='promoted' and old.status is distinct from 'promoted' then
+   perform public.record_mission_progress(new.club_id,'player_promoted','academy-promotion:'||new.id);
+ end if;
+ return new;
+end;
+$$;
+drop trigger if exists academy_track_promotion_mission on public.academy_players;
+create trigger academy_track_promotion_mission after update of status on public.academy_players
+for each row execute function public.track_youth_promotion_mission();
