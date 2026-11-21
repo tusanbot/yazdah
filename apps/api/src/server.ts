@@ -93,6 +93,53 @@ app.post<{ Body: { initData?: string } }>("/auth/telegram", async (request, repl
   return { user: data, accessToken: signSession(data.id), expiresIn: 900 };
 });
 
+app.get("/clubs/me", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("club_memberships")
+    .select("club_id, role")
+    .eq("user_id", userId)
+    .eq("role", "owner")
+    .maybeSingle();
+
+  if (membershipError) {
+    request.log.error({ err: membershipError }, "club membership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!membership) return { club: null };
+
+  const [clubResult, economyResult, tacticsResult] = await Promise.all([
+    supabase.from("clubs")
+      .select("id, name, slug, logo_url, country_code, city, founded_at, level, reputation, created_at")
+      .eq("id", membership.club_id)
+      .single(),
+    supabase.from("club_economy").select("balance").eq("club_id", membership.club_id).single(),
+    supabase.from("club_tactics").select("formation, mentality, tempo, pressing")
+      .eq("club_id", membership.club_id).single(),
+  ]);
+
+  if (clubResult.error || economyResult.error || tacticsResult.error) {
+    request.log.error({
+      club: clubResult.error,
+      economy: economyResult.error,
+      tactics: tacticsResult.error,
+    }, "club profile lookup failed");
+    return reply.code(500).send({ error: "club_profile_load_failed" });
+  }
+
+  return {
+    club: {
+      ...clubResult.data,
+      role: membership.role,
+      economy: economyResult.data,
+      tactics: tacticsResult.data,
+    },
+  };
+});
+
 app.post<{ Body: { name?: string; slug?: string; logoUrl?: string; countryCode?: string; city?: string } }>(
   "/clubs",
   async (request, reply) => {
