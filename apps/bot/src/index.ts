@@ -123,7 +123,7 @@ bot.command("game", async (ctx) => {
     await ctx.reply("سرویس چالش‌های گروهی پیکربندی نشده است.");
     return;
   }
-  const args = ctx.match.trim().split(/\\s+/).filter(Boolean);
+  const args = ctx.match.trim().split(/\s+/).filter(Boolean);
   const aliases: Record<string, string> = {
     draft: "draft", درفت: "draft",
     penalty: "penalty", پنالتی: "penalty",
@@ -141,7 +141,7 @@ bot.command("game", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/games`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/games`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
