@@ -11,6 +11,26 @@ create table if not exists public.group_treasury_transactions (
   unique(telegram_chat_id,idempotency_key)
 );
 
+-- Record the opening group treasury balance and keep future group creation auditable.
+insert into public.group_treasury_transactions(telegram_chat_id,amount,balance_after,reason,idempotency_key)
+select telegram_chat_id,100000,treasury_balance,'group_treasury_opening','opening'
+from public.group_economies
+on conflict(telegram_chat_id,idempotency_key) do nothing;
+
+create or replace function public.ensure_group_economy()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+declare v_balance bigint;
+begin
+  insert into public.group_economies(telegram_chat_id) values(new.telegram_chat_id)
+    on conflict do nothing;
+  select treasury_balance into v_balance from public.group_economies where telegram_chat_id=new.telegram_chat_id;
+  insert into public.group_treasury_transactions(telegram_chat_id,amount,balance_after,reason,idempotency_key)
+    values(new.telegram_chat_id,100000,v_balance,'group_treasury_opening','opening')
+    on conflict(telegram_chat_id,idempotency_key) do nothing;
+  return new;
+end;
+$;
+
 create or replace function public.create_group_game(
   p_chat_id bigint,p_creator_user_id uuid,p_game_type text,p_entry_fee bigint,p_max_participants integer,p_title text
 ) returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
