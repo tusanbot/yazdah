@@ -23,8 +23,14 @@ try {
   process.exit(2);
 }
 
-const meta = dataset?.dataset;
-if (!meta || !isText(meta.source_name) || !isText(meta.source_url) ||
+if (!dataset || typeof dataset !== "object" || Array.isArray(dataset)) {
+  console.error("Catalog validation failed: root must be a JSON object.");
+  process.exit(1);
+}
+
+const meta = dataset.dataset;
+if (!meta || typeof meta !== "object" || Array.isArray(meta) ||
+    !isText(meta.source_name) || !isText(meta.source_url) ||
     !isText(meta.retrieved_at) || Number.isNaN(Date.parse(meta.retrieved_at)) ||
     !isText(meta.license) || !isText(meta.dataset_version) || !isText(meta.reviewed_by)) {
   fail("dataset", "source_name, source_url, valid retrieved_at, license, dataset_version and reviewed_by are required");
@@ -46,7 +52,9 @@ for (const [index, player] of dataset.players.entries()) {
     if (!isText(player[field])) fail(where, `${field} is required`);
   }
   if (isText(player.full_name) && player.full_name.trim().length > 120) fail(where, "full_name exceeds 120 characters");
-  if (isText(player.birth_date) && (!/^\d{4}-\d{2}-\d{2}$/.test(player.birth_date) || Number.isNaN(Date.parse(player.birth_date)))) {
+  if (isText(player.birth_date) && (!/^\d{4}-\d{2}-\d{2}$/.test(player.birth_date) ||
+      Number.isNaN(Date.parse(player.birth_date)) ||
+      new Date(player.birth_date).toISOString().slice(0, 10) !== player.birth_date)) {
     fail(where, "birth_date must use YYYY-MM-DD");
   }
   if (player.nationality_code != null && !/^[A-Z]{2}$/.test(player.nationality_code)) fail(where, "nationality_code must be a two-letter uppercase code or null");
