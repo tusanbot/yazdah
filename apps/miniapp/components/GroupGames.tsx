@@ -361,7 +361,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
                       <strong>{userId === detail.currentUserId ? "ترکیب شما" : "ترکیب حریف"}</strong>
                       <span>دروازه‌بان: {lineup.goalkeeper?.full_name ?? "—"}</span>
                       {(lineup.fieldPlayers ?? []).map((player) => (
-                        <span key={player.id}>{positionLabels[player.assignedLine] ?? player.assignedLine}: {player.full_name} · قدرت {player.overall}</span>
+                        <span key={player.id}>{positionLabels[player.assignedLine ?? ""] ?? player.assignedLine ?? player.position_group ?? "بازیکن"}: {player.full_name} · قدرت {player.overall}</span>
                       ))}
                     </div>
                   ))}
