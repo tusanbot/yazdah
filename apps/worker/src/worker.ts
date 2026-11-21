@@ -68,7 +68,6 @@ async function payStaffDaily(job: Job) {
 async function trainPlayersDaily(job: Job) {
   const clubId = job.payload.club_id;
   const stateDate = job.payload.state_date;
-  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(stateDate)) {
   if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stateDate)) {
   }
   const { data, error } = await supabase.rpc("apply_daily_training", {
