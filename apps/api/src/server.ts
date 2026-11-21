@@ -217,7 +217,7 @@ app.get("/market", async (request, reply) => {
   try {
     const { data, error } = await supabase.from("transfer_listings")
       .select("id, asking_price, listed_at, expires_at, player:players(id, full_name, position, overall, potential, nationality_code), seller:clubs!transfer_listings_seller_club_id_fkey(id, name, slug)")
-      .eq("status", "listed").order("listed_at", { ascending: false }).limit(50);
+      .eq("status", "listed").or("expires_at.is.null,expires_at.gt." + new Date().toISOString()).order("listed_at", { ascending: false }).limit(50);
     if (error) throw error;
     return { listings: data ?? [] };
   } catch (error) {
