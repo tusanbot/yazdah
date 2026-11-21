@@ -209,6 +209,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       })),
       isCreator: game.created_by_user_id === userId,
       isParticipant: Boolean(me),
+      currentUserId: userId,
     };
   });
 
