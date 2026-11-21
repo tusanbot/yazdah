@@ -23,6 +23,8 @@ async function resolveMatch(job: Job) {
   if (typeof matchId !== "string") throw new Error("match_id_missing");
   const { error } = await supabase.rpc("resolve_match", { p_match_id: matchId });
   if (error) throw new Error(error.message);
+  const { error: prizeError } = await supabase.rpc("settle_match_prizes", { p_match_id: matchId });
+  if (prizeError) throw new Error(prizeError.message);
 }
 
 async function payStaffDaily(job: Job) {
