@@ -424,6 +424,78 @@ app.post<{ Body: { packKey?: string; idempotencyKey?: string } }>("/clubs/me/spe
   };
 });
 
+app.put<{ Params: { id: string }; Body: { catalogPlayerId?: string } }>("/admin/competitions/:id/special-player-reward", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const competitionId = request.params.id;
+  const catalogPlayerId = request.body?.catalogPlayerId;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(competitionId) || typeof catalogPlayerId !== "string" || !uuidPattern.test(catalogPlayerId)) {
+    return reply.code(400).send({ error: "special_reward_input_invalid" });
+  }
+  const [competition, player] = await Promise.all([
+    supabase.from("competitions").select("id,competition_type,status").eq("id", competitionId).maybeSingle(),
+    supabase.from("player_catalog").select("id").eq("id", catalogPlayerId).eq("player_class", "special").eq("active", true).maybeSingle(),
+  ]);
+  if (competition.error || player.error) {
+    request.log.error({ err: competition.error ?? player.error }, "special reward validation failed");
+    return reply.code(500).send({ error: "special_reward_validation_failed" });
+  }
+  if (!competition.data) return reply.code(404).send({ error: "competition_not_found" });
+  if (!["cup", "league", "tournament"].includes(competition.data.competition_type) || competition.data.status === "completed" || competition.data.status === "cancelled") {
+    return reply.code(409).send({ error: "competition_not_configurable" });
+  }
+  if (!player.data) return reply.code(404).send({ error: "active_special_player_not_found" });
+  const { error } = await supabase.from("competition_special_player_rewards").upsert({
+    competition_id: competitionId, catalog_player_id: catalogPlayerId,
+  }, { onConflict: "competition_id" });
+  if (error) {
+    request.log.error({ err: error }, "special competition reward configuration failed");
+    return reply.code(500).send({ error: "special_reward_save_failed" });
+  }
+  return { configured: true, competitionId, catalogPlayerId };
+});
+
+app.post<{ Body: { clubId?: string; catalogPlayerId?: string; referenceId?: string; idempotencyKey?: string } }>("/admin/special-event-rewards/issue", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const { clubId, catalogPlayerId, referenceId, idempotencyKey } = request.body ?? {};
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (typeof clubId !== "string" || !uuidPattern.test(clubId) ||
+      typeof catalogPlayerId !== "string" || !uuidPattern.test(catalogPlayerId) ||
+      typeof referenceId !== "string' || referenceId.trim().length < 1 || referenceId.trim().length > 160 ||
+      typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 1 || idempotencyKey.trim().length > 160) {
+    return reply.code(400).send({ error: "special_event_reward_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("issue_special_player_entitlement", {
+    p_club_id: clubId, p_catalog_player_id: catalogPlayerId, p_source: "special_event",
+    p_reference_id: referenceId.trim(), p_idempotency_key: idempotencyKey.trim(),
+  });
+  if (error) {
+    if (error.code === "P0002") return reply.code(404).send({ error: "active_special_player_not_found" });
+    if (error.code === "23505") return reply.code(409).send({ error: "special_event_reward_conflict" });
+    request.log.error({ err: error }, "special event reward issue failed");
+    return reply.code(500).send({ error: "special_event_reward_issue_failed" });
+  }
+  return { issued: true, entitlementId: data, clubId };
+});
+
 app.get<{ Querystring: { class?: string } }>("/players/catalog", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
