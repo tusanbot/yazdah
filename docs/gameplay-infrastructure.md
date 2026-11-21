@@ -22,10 +22,12 @@
 - `POST /auth/telegram` — اعتبارسنجی initData و صدور نشست کوتاه‌عمر.
 - `POST /clubs` — ساخت باشگاه.
 - `GET /clubs/me` — دریافت پروفایل باشگاه مالک.
-- `GET /market` — آگهی‌های فعال بازار؛ `POST /market/buy` — خرید اتمی بازیکن و تسویهٔ دفترکل.\n- `GET /clubs/me/transfer-listings`, `POST /clubs/me/transfer-listings`, `POST /clubs/me/transfer-listings/withdraw` — فهرست آگهی‌های باشگاه، ثبت آگهی و برداشت آگهی.
+- `GET /market` — آگهی‌های فعال بازار؛ `POST /market/buy` — خرید اتمی بازیکن و تسویهٔ دفترکل.
+- `GET /clubs/me/transfer-listings`, `POST /clubs/me/transfer-listings`, `POST /clubs/me/transfer-listings/withdraw` — فهرست آگهی‌های باشگاه، ثبت آگهی و برداشت آگهی.
 - `GET /inbox` — پیام‌های کاربر.
 - `POST /clubs/me/tactics` — تغییر تاکتیک با اعتبارسنجی سمت سرور.
-- `POST /clubs/me/lineup` — ثبت ترکیب یازده‌نفره از بازیکنان همان باشگاه.\n- `GET /clubs/me/staff`, `POST /clubs/me/staff`, `POST /clubs/me/staff/release` — فهرست، استخدام و فسخ کادر فنی با کنترل مالکیت و عملیات مالی اتمی.
+- `POST /clubs/me/lineup` — ثبت ترکیب یازده‌نفره از بازیکنان همان باشگاه.
+- `GET /clubs/me/staff`, `POST /clubs/me/staff`, `POST /clubs/me/staff/release` — فهرست، استخدام و فسخ کادر فنی با کنترل مالکیت و عملیات مالی اتمی.
 
 ## قرارداد Worker و صف
 
@@ -62,8 +64,8 @@ Worker باید کارهای آماده را با قفل/claim اتمی دریا
 
 ## بازار نقل‌وانتقالات
 
-- عملیات بازار در migration \`202611210007_transfer_market_operations.sql\` تعریف شده و باید پس از migrationهای قبلی اعمال شود.
+- عملیات بازار در migration `202611210007_transfer_market_operations.sql` تعریف شده و باید پس از migrationهای قبلی اعمال شود.
 - ثبت آگهی بازیکن را از ترکیب اصلی خارج می‌کند؛ خرید، انتقال مالکیت بازیکن و تسویهٔ هر دو باشگاه در یک تراکنش دیتابیس انجام می‌شود.
 - کلیدهای دفترکل برای هر آگهی یکتا هستند؛ درخواست خرید تکراری از سوی خریدار همان آگهی، بدون برداشت دوباره، idempotent است.
 - آگهی فعال قابل برداشت است و بازیکن پس از برداشت یا فروش می‌تواند دوباره آگهی شود.
-- Mini App امکانات ثبت و برداشت آگهی، مشاهدهٔ بازار و خرید را دارد؛ فرمان \`/market\` در ربات، کاربر را به همین رابط مشترک هدایت می‌کند.
+- Mini App امکانات ثبت و برداشت آگهی، مشاهدهٔ بازار و خرید را دارد؛ فرمان `/market` در ربات، کاربر را به همین رابط مشترک هدایت می‌کند.
