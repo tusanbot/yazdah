@@ -18,6 +18,17 @@ type AuthResult = {
   accessToken: string;
   user: { id: string; first_name: string; username?: string | null };
 };
+type ClubProfile = {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  country_code: string | null;
+  level: number;
+  reputation: number;
+  economy: { balance: number };
+  tactics: { formation: string; mentality: string; tempo: string; pressing: string };
+};
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -30,6 +41,7 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState<AuthResult | null>(null);
   const [clubId, setClubId] = useState("");
+  const [clubProfile, setClubProfile] = useState<ClubProfile | null>(null);
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -72,6 +84,12 @@ export default function HomePage() {
       const clubBody = await clubResponse.json();
       if (!clubResponse.ok) throw new Error(clubBody.error ?? "ثبت باشگاه ناموفق بود.");
       setClubId(clubBody.clubId);
+      const profileResponse = await fetch(`${API_URL}/clubs/me`, {
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
+      });
+      const profileBody = await profileResponse.json();
+      if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
+      setClubProfile(profileBody.club as ClubProfile);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
@@ -93,6 +111,12 @@ export default function HomePage() {
           <div className="success" role="status">
             <h2>باشگاه ثبت شد</h2>
             <p>شناسه باشگاه: <code>{clubId}</code></p>
+            {clubProfile && <>
+              <p>نام باشگاه: {clubProfile.name}</p>
+              <p>سطح: {clubProfile.level} · اعتبار: {clubProfile.reputation}</p>
+              <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
+              <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
+            </>}
             <p>مرحله بعدی: تکمیل پروفایل، لوگو و ترکیب اولیه.</p>
           </div>
         ) : (
