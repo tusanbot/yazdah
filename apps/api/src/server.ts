@@ -290,6 +290,43 @@ app.post<{ Body: { playerIds?: string[] } }>("/clubs/me/lineup", async (request,
   return { success: true };
 });
 
+app.get("/clubs/me/matches", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("matches")
+    .select("id, competition_id, home_club_id, away_club_id, kickoff_at, status, home_score, away_score, competition:competitions(name, competition_type, season)")
+    .or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`)
+    .order("kickoff_at", { ascending: false }).limit(30);
+  if (error) {
+    request.log.error({ err: error }, "club matches lookup failed");
+    return reply.code(500).send({ error: "matches_load_failed" });
+  }
+  return { matches: data ?? [] };
+});
+
+app.get("/competitions", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  const { data, error } = await supabase.from("competitions")
+    .select("id, name, competition_type, season, status, starts_at")
+    .in("status", ["scheduled", "running"])
+    .order("starts_at", { ascending: true, nullsFirst: false }).limit(50);
+  if (error) {
+    request.log.error({ err: error }, "competitions lookup failed");
+    return reply.code(500).send({ error: "competitions_load_failed" });
+  }
+  return { competitions: data ?? [] };
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
