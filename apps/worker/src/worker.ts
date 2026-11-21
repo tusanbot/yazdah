@@ -76,6 +76,40 @@ async function process(job: Job) {
   }
 }
 
+async function enqueueDueWork() {
+  const now = new Date().toISOString();
+  const { data: matches, error: matchError } = await supabase.from("matches")
+    .select("id, kickoff_at")
+    .eq("status", "scheduled")
+    .lte("kickoff_at", now)
+    .limit(100);
+  if (matchError) throw new Error(matchError.message);
+
+  for (const match of matches ?? []) {
+    const { error } = await supabase.from("game_jobs").upsert({
+      job_type: "match.resolve",
+      payload: { match_id: match.id },
+      run_at: match.kickoff_at,
+      idempotency_key: `match.resolve:${match.id}`,
+    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
+  }
+
+  const stateDate = now.slice(0, 10);
+  const { data: clubs, error: clubsError } = await supabase.from("clubs").select("id").limit(1000);
+  if (clubsError) throw new Error(clubsError.message);
+
+  for (const club of clubs ?? []) {
+    const { error } = await supabase.from("game_jobs").upsert({
+      job_type: "staff.payroll",
+      payload: { club_id: club.id, state_date: stateDate },
+      run_at: `${stateDate}T00:05:00.000Z`,
+      idempotency_key: `staff.payroll:${stateDate}:${club.id}`,
+    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
+  }
+}
+
 async function pollOnce() {
   const { data, error } = await supabase.rpc("claim_game_job", { p_lease_seconds: leaseSeconds });
   if (error) throw new Error(error.message);
