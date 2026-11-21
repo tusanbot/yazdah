@@ -56,7 +56,10 @@ export default function HomePage() {
   const [prospectBirthDate, setProspectBirthDate] = useState("");
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
-  const [players, setPlayers] = useState<SquadPlayer[]>([]);\n  const [trainingPlan, setTrainingPlan] = useState("balanced");\n  const [trainingStatus, setTrainingStatus] = useState("");\n  const [contractStatus, setContractStatus] = useState("");
+  const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [trainingPlan, setTrainingPlan] = useState("balanced");
+  const [trainingStatus, setTrainingStatus] = useState("");
+  const [contractStatus, setContractStatus] = useState("");
   const [matches, setMatches] = useState<ClubMatch[]>([]);
   const [matchBusyId, setMatchBusyId] = useState("");
   const [matchStatus, setMatchStatus] = useState("");
@@ -126,7 +129,8 @@ export default function HomePage() {
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
-      await loadPlayers(auth.accessToken);\n      await loadTrainingPlan(auth.accessToken);
+      await loadPlayers(auth.accessToken);
+      await loadTrainingPlan(auth.accessToken);
       await loadMatches(auth.accessToken);
       await loadMarket(auth.accessToken);
       await loadOwnListings(auth.accessToken);
@@ -465,7 +469,8 @@ export default function HomePage() {
                   <label><input type="checkbox" checked={selectedPlayerIds.includes(player.id)} onChange={(event) => setSelectedPlayerIds((ids) => event.target.checked ? [...ids, player.id] : ids.filter((id) => id !== player.id))} /> انتخاب برای ترکیب</label>
                 </article>)}
               </div>
-              {contractStatus && <p className="notice" role="status">{contractStatus}</p>}\n              <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
+              {contractStatus && <p className="notice" role="status">{contractStatus}</p>}
+              <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
               <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
               {lineupStatus && <p className="notice" role="status">{lineupStatus}</p>}
             </section>
