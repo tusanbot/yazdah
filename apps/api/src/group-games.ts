@@ -297,9 +297,6 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
         .select("club_id").eq("user_id", userId).eq("role", "owner").maybeSingle();
       if (membershipError) return reply.code(500).send({ error: "club_lookup_failed" });
       if (!membership) return reply.code(409).send({ error: "club_required_before_group_game" });
-      const gameAccess = await verifyGameGroup(supabase, request.params.gameId, chatId);
-      if (gameAccess === "error") return reply.code(500).send({ error: "group_game_lookup_failed" });
-      if (gameAccess === "missing") return reply.code(404).send({ error: "group_game_not_found" });
       const { data, error } = await supabase.rpc("join_group_game", {
         p_game_id: request.params.gameId, p_user_id: userId, p_club_id: membership.club_id, p_formation: formation,
       });
