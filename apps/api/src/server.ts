@@ -180,6 +180,116 @@ app.post<{ Body: { name?: string; slug?: string; logoUrl?: string; countryCode?:
   },
 );
 
+async function ownedClubId(userId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("club_memberships")
+    .select("club_id").eq("user_id", userId).eq("role", "owner").maybeSingle();
+  if (error) throw error;
+  return data?.club_id ?? null;
+}
+
+app.get("/market", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  try {
+    const { data, error } = await supabase.from("transfer_listings")
+      .select("id, asking_price, listed_at, expires_at, player:players(id, full_name, position, overall, potential, nationality_code), seller:clubs!transfer_listings_seller_club_id_fkey(id, name, slug)")
+      .eq("status", "listed").order("listed_at", { ascending: false }).limit(50);
+    if (error) throw error;
+    return { listings: data ?? [] };
+  } catch (error) {
+    request.log.error({ err: error }, "transfer market lookup failed");
+    return reply.code(500).send({ error: "market_load_failed" });
+  }
+});
+
+app.get("/inbox", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  const { data, error } = await supabase.from("game_inbox")
+    .select("id, category, title, body, payload, read_at, created_at")
+    .eq("user_id", userId).order("created_at", { ascending: false }).limit(50);
+  if (error) {
+    request.log.error({ err: error }, "inbox lookup failed");
+    return reply.code(500).send({ error: "inbox_load_failed" });
+  }
+  return { messages: data ?? [] };
+});
+
+app.post<{ Body: { formation?: string; mentality?: string; tempo?: string; pressing?: string } }>(
+  "/clubs/me/tactics",
+  async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    let clubId: string | null;
+    try { clubId = await ownedClubId(userId); }
+    catch (error) {
+      request.log.error({ err: error }, "club ownership lookup failed");
+      return reply.code(500).send({ error: "club_lookup_failed" });
+    }
+    if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+
+    const { formation, mentality, tempo, pressing } = request.body ?? {};
+    if (formation !== undefined && !/^(4-4-2|4-3-3|4-2-3-1|3-5-2|5-3-2)$/.test(formation)) {
+      return reply.code(400).send({ error: "formation_invalid" });
+    }
+    if (mentality !== undefined && !["very_defensive", "defensive", "balanced", "attacking", "very_attacking"].includes(mentality)) {
+      return reply.code(400).send({ error: "mentality_invalid" });
+    }
+    if (tempo !== undefined && !["slow", "normal", "fast"].includes(tempo)) {
+      return reply.code(400).send({ error: "tempo_invalid" });
+    }
+    if (pressing !== undefined && !["low", "standard", "high"].includes(pressing)) {
+      return reply.code(400).send({ error: "pressing_invalid" });
+    }
+    const { data, error } = await supabase.from("club_tactics").upsert({
+      club_id: clubId,
+      ...(formation !== undefined ? { formation } : {}),
+      ...(mentality !== undefined ? { mentality } : {}),
+      ...(tempo !== undefined ? { tempo } : {}),
+      ...(pressing !== undefined ? { pressing } : {}),
+      updated_at: new Date().toISOString(),
+    }).select("formation, mentality, tempo, pressing").single();
+    if (error) {
+      request.log.error({ err: error }, "tactics update failed");
+      return reply.code(500).send({ error: "tactics_update_failed" });
+    }
+    return { tactics: data };
+  },
+);
+
+app.post<{ Body: { playerIds?: string[] } }>("/clubs/me/lineup", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const playerIds = request.body?.playerIds;
+  if (!Array.isArray(playerIds) || playerIds.length !== 11 ||
+      playerIds.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) ||
+      new Set(playerIds).size !== 11) {
+    return reply.code(400).send({ error: "lineup_requires_11_unique_player_ids" });
+  }
+  const { error } = await supabase.rpc("set_club_lineup", {
+    p_club_id: clubId,
+    p_player_ids: playerIds,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "lineup_players_invalid_or_not_owned" });
+    request.log.error({ err: error }, "lineup update failed");
+    return reply.code(500).send({ error: "lineup_update_failed" });
+  }
+  return { success: true };
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
