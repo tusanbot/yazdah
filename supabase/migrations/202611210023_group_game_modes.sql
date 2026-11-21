@@ -125,7 +125,7 @@ begin
         update public.group_games set status='completed',completed_at=now(),deadline_at=null,winner_user_id=v_winner,
           state=state||jsonb_build_object('winner',v_winner,'finalScores',(select jsonb_object_agg(user_id::text,score) from public.group_game_participants where game_id=p_game_id))
           where id=p_game_id;
-        if v_winner is not null and g.prize_pool>0 then perform public.group_wallet_change(v_chat,v_winner,g.prize_pool,'challenge_prize',p_game_id::text||':winner'); end if;
+        if g.prize_pool>0 then perform public.settle_group_game_prize(p_game_id,case when v_winner is not null then array[v_winner] else coalesce(v_ties,'{}'::uuid[]) end); end if;
         for v_part in select user_id from public.group_game_participants where game_id=p_game_id loop
           perform public.record_group_mission_event(v_chat,v_part.user_id,'game_completed','complete:'||p_game_id||':'||v_part.user_id);
         end loop;
