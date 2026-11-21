@@ -108,7 +108,7 @@ bot.command("challenge", async (ctx) => {
 });
 
 bot.command("game", async (ctx) => {
-  if (ctx.chat.type === "private") {
+  if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
     await ctx.reply("این فرمان را داخل گروه متصل اجرا کن. نمونه: /game draft 100 یا /game survival 0 20\nانواع: draft، penalty، cards، quiz، guess، survival");
     return;
   }
@@ -175,7 +175,7 @@ bot.command("game", async (ctx) => {
 });
 
 bot.command("games", async (ctx) => {
-  if (ctx.chat.type === "private") {
+  if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
     await ctx.reply("برای دیدن چالش‌های گروه، این فرمان را داخل گروه تلگرام اجرا کن.");
     return;
   }
