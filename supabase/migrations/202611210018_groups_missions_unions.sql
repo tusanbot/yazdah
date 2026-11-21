@@ -137,3 +137,74 @@ $$;
 drop trigger if exists matches_track_mission_progress on public.matches;
 create trigger matches_track_mission_progress after update of status on public.matches
 for each row execute function public.track_completed_match_missions();
+
+create or replace function public.create_club_union(p_club_id uuid,p_name text,p_tag text)
+returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_union_id uuid;
+begin
+ if exists(select 1 from public.club_union_members where club_id=p_club_id) then
+   raise exception 'club_already_in_union' using errcode='23505';
+ end if;
+ insert into public.club_unions(name,tag,leader_club_id)
+ values(trim(p_name),upper(trim(p_tag)),p_club_id) returning id into v_union_id;
+ insert into public.club_union_members(union_id,club_id,role) values(v_union_id,p_club_id,'leader');
+ return v_union_id;
+end;
+$$;
+create or replace function public.join_club_union(p_club_id uuid,p_union_id uuid)
+returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if not exists(select 1 from public.club_unions where id=p_union_id) then
+   raise exception 'union_not_found' using errcode='P0002';
+ end if;
+ if exists(select 1 from public.club_union_members where club_id=p_club_id) then
+   raise exception 'club_already_in_union' using errcode='23505';
+ end if;
+ if (select count(*) from public.club_union_members where union_id=p_union_id)>=20 then
+   raise exception 'union_full' using errcode='22023';
+ end if;
+ insert into public.club_union_members(union_id,club_id,role) values(p_union_id,p_club_id,'member');
+end;
+$$;
+create or replace function public.create_group_challenge(
+ p_telegram_chat_id bigint,p_challenger_club_id uuid,p_opponent_club_id uuid,p_kickoff_at timestamptz
+) returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_challenge_id uuid;
+begin
+ if p_challenger_club_id=p_opponent_club_id or p_kickoff_at<=now() then
+   raise exception 'challenge_input_invalid' using errcode='22023';
+ end if;
+ if not exists(select 1 from public.telegram_game_groups where telegram_chat_id=p_telegram_chat_id) then
+   raise exception 'telegram_group_not_linked' using errcode='P0002';
+ end if;
+ insert into public.group_challenges(telegram_chat_id,challenger_club_id,opponent_club_id)
+ values(p_telegram_chat_id,p_challenger_club_id,p_opponent_club_id) returning id into v_challenge_id;
+ return v_challenge_id;
+end;
+$$;
+create or replace function public.accept_group_challenge(p_challenge_id uuid,p_opponent_club_id uuid,p_kickoff_at timestamptz)
+returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_challenge public.group_challenges%rowtype; v_match_id uuid;
+begin
+ select * into v_challenge from public.group_challenges where id=p_challenge_id for update;
+ if not found then raise exception 'challenge_not_found' using errcode='P0002'; end if;
+ if v_challenge.status<>'pending' or v_challenge.opponent_club_id<>p_opponent_club_id then
+   raise exception 'challenge_not_available' using errcode='22023';
+ end if;
+ if p_kickoff_at<=now() then raise exception 'challenge_kickoff_invalid' using errcode='22023'; end if;
+ insert into public.matches(home_club_id,away_club_id,kickoff_at)
+ values(v_challenge.challenger_club_id,v_challenge.opponent_club_id,p_kickoff_at)
+ returning id into v_match_id;
+ update public.group_challenges set status='accepted',match_id=v_match_id,accepted_at=now()
+ where id=p_challenge_id;
+ return v_match_id;
+end;
+$$;
+revoke all on function public.create_club_union(uuid,text,text) from public,anon,authenticated;
+revoke all on function public.join_club_union(uuid,uuid) from public,anon,authenticated;
+revoke all on function public.create_group_challenge(bigint,uuid,uuid,timestamptz) from public,anon,authenticated;
+revoke all on function public.accept_group_challenge(uuid,uuid,timestamptz) from public,anon,authenticated;
+grant execute on function public.create_club_union(uuid,text,text) to service_role;
+grant execute on function public.join_club_union(uuid,uuid) to service_role;
+grant execute on function public.create_group_challenge(bigint,uuid,uuid,timestamptz) to service_role;
+grant execute on function public.accept_group_challenge(uuid,uuid,timestamptz) to service_role;
