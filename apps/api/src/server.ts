@@ -92,6 +92,76 @@ app.post<{ Body: { telegramUserId?: number; telegramChatId?: number; title?: str
   return { linked: true, telegramChatId };
 });
 
+async function requireAdmin(userId: string) {
+  if (!supabase) return { allowed: false, error: "database_not_configured" };
+  const { data, error } = await supabase.from("game_admins").select("role").eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return { allowed: Boolean(data), role: data?.role ?? null };
+}
+
+app.get("/admin/overview", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); } catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const [users, clubs, matches, pending, failed] = await Promise.all([
+    supabase.from("game_users").select("id", { count: "exact", head: true }),
+    supabase.from("clubs").select("id", { count: "exact", head: true }),
+    supabase.from("matches").select("id", { count: "exact", head: true }),
+    supabase.from("telegram_notification_outbox").select("id", { count: "exact", head: true }).in("status", ["pending","processing"]),
+    supabase.from("telegram_notification_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
+  ]);
+  const failedQuery = [users, clubs, matches, pending, failed].find((item) => item.error);
+  if (failedQuery?.error) {
+    request.log.error({ err: failedQuery.error }, "admin overview query failed");
+    return reply.code(500).send({ error: "admin_overview_failed" });
+  }
+  const { data: recentAudit, error: auditError } = await supabase.from("admin_audit_log")
+    .select("id,actor_user_id,action,target_type,target_id,details,created_at")
+    .order("created_at", { ascending: false }).limit(20);
+  if (auditError) return reply.code(500).send({ error: "admin_audit_load_failed" });
+  return { role: admin.role, stats: {
+    users: users.count ?? 0, clubs: clubs.count ?? 0, matches: matches.count ?? 0,
+    notificationsPending: pending.count ?? 0, notificationsFailed: failed.count ?? 0,
+  }, recentAudit: recentAudit ?? [] };
+});
+
+app.post<{ Params: { id: string } }>("/admin/notifications/:id/retry", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let admin;
+  try { admin = await requireAdmin(userId); } catch (error) {
+    request.log.error({ err: error }, "admin permission lookup failed");
+    return reply.code(500).send({ error: "admin_permission_lookup_failed" });
+  }
+  if (!admin.allowed) return reply.code(403).send({ error: "admin_access_required" });
+  const notificationId = request.params.id;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(notificationId)) {
+    return reply.code(400).send({ error: "notification_id_invalid" });
+  }
+  const { data, error } = await supabase.from("telegram_notification_outbox")
+    .update({ status: "pending", available_at: new Date().toISOString(), locked_at: null, last_error: null })
+    .eq("id", notificationId).eq("status", "failed")
+    .select("id").maybeSingle();
+  if (error) return reply.code(500).send({ error: "notification_retry_failed" });
+  if (!data) return reply.code(409).send({ error: "notification_not_failed_or_not_found" });
+  const { error: auditError } = await supabase.from("admin_audit_log").insert({
+    actor_user_id: userId, action: "notification.retry", target_type: "telegram_notification",
+    target_id: notificationId, details: {},
+  });
+  if (auditError) {
+    request.log.error({ err: auditError }, "admin audit write failed");
+    return reply.code(500).send({ error: "admin_audit_write_failed" });
+  }
+  return { retried: true, notificationId };
+});
+
 app.get("/health", async () => ({
   status: "ok",
   service: "yazdah-api",
