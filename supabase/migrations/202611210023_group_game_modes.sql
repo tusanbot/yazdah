@@ -40,7 +40,8 @@ begin
     select jsonb_agg(to_jsonb(x)) into v_cards from (
       select id,full_name,position_group,overall,rarity,nationality,clues from public.group_legend_cards order by random() limit 10
     ) x;
-    v_state:=jsonb_build_object('players',v_cards,'round',1,'answers','{}'::jsonb);
+    v_state:=jsonb_build_object('players',v_cards,'round',1,'answers','{}'::jsonb,
+      'hintLevels',(select jsonb_object_agg(user_id::text,1) from public.group_game_participants where game_id=p_game_id));
   elsif g.game_type='cards' then
     select jsonb_agg(to_jsonb(x)) into v_cards from (
       select id,full_name,position_group,overall,rarity,nationality from public.group_legend_cards order by random() limit 10
@@ -316,3 +317,33 @@ revoke all on function public.submit_group_game_action(uuid,uuid,jsonb,boolean) 
 revoke all on function public.process_expired_group_games(integer) from public,anon,authenticated;
 grant execute on function public.submit_group_game_action(uuid,uuid,jsonb,boolean) to service_role;
 grant execute on function public.process_expired_group_games(integer) to service_role;
+
+
+create or replace function public.reveal_group_guess_hint(p_game_id uuid,p_user_id uuid)
+returns integer language plpgsql security definer set search_path=public,pg_temp as $$
+declare g public.group_games%rowtype; v_level integer; v_total integer;
+begin
+  select * into g from public.group_games where id=p_game_id for update;
+  if not found or g.game_type<>'guess' or g.status<>'active' then
+    raise exception 'guess_game_not_active' using errcode='22023';
+  end if;
+  if g.deadline_at<=now() then raise exception 'group_game_turn_expired' using errcode='22023'; end if;
+  if not exists(select 1 from public.group_game_participants where game_id=p_game_id and user_id=p_user_id and status='active') then
+    raise exception 'group_game_participant_required' using errcode='42501';
+  end if;
+  if g.state->'answers' ? p_user_id::text then
+    raise exception 'group_game_action_already_submitted' using errcode='23505';
+  end if;
+  v_level:=coalesce((g.state->'hintLevels'->>p_user_id::text)::integer,1);
+  select jsonb_array_length(clues) into v_total
+    from public.group_legend_cards where id=g.state->'players'->((g.state->>'round')::integer-1)->>'id';
+  if v_level>=coalesce(v_total,1) then raise exception 'guess_no_more_hints' using errcode='22023'; end if;
+  v_level:=v_level+1;
+  update public.group_games set state=jsonb_set(state,array['hintLevels',p_user_id::text],to_jsonb(v_level),true)
+    where id=p_game_id;
+  return v_level;
+end;
+$$;
+
+revoke all on function public.reveal_group_guess_hint(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.reveal_group_guess_hint(uuid,uuid) to service_role;
