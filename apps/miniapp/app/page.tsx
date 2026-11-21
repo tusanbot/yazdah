@@ -18,6 +18,7 @@ type AuthResult = {
   accessToken: string;
   user: { id: string; first_name: string; username?: string | null };
 };
+type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubProfile = {
@@ -51,6 +52,7 @@ export default function HomePage() {
   const [prospectBirthDate, setProspectBirthDate] = useState("");
   const [prospectPosition, setProspectPosition] = useState("ST");
   const [prospectPotential, setProspectPotential] = useState(60);
+  const [players, setPlayers] = useState<SquadPlayer[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffBusy, setStaffBusy] = useState(false);
   const [staffStatus, setStaffStatus] = useState("");
@@ -107,6 +109,7 @@ export default function HomePage() {
       const profileBody = await profileResponse.json();
       if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       setClubProfile(profileBody.club as ClubProfile);
+      await loadPlayers(auth.accessToken);
       await loadAcademy(auth.accessToken);
       await loadStaff(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
@@ -115,6 +118,13 @@ export default function HomePage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadPlayers(accessToken: string) {
+    const response = await fetch(`${API_URL}/clubs/me/players`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "بارگذاری فهرست بازیکنان ناموفق بود.");
+    setPlayers(body.players as SquadPlayer[]);
   }
 
   async function loadAcademy(accessToken: string) {
@@ -212,6 +222,7 @@ export default function HomePage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "ارتقای بازیکن ناموفق بود.");
       setProspects((items) => items.map((item) => item.id === prospectId ? { ...item, status: "promoted" } : item));
+      await loadPlayers(session.accessToken);
       setAcademyStatus("بازیکن با موفقیت به تیم اصلی منتقل شد.");
     } catch (error) {
       setAcademyStatus(error instanceof Error ? error.message : "خطای نامشخص در آکادمی.");
@@ -240,6 +251,15 @@ export default function HomePage() {
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
             <p>مرحله بعدی: تکمیل پروفایل، لوگو و ترکیب اولیه.</p>
+            <section className="academy" aria-labelledby="squad-heading">
+              <h2 id="squad-heading">فهرست بازیکنان</h2>
+              <p className="muted">بازیکنان تحت قرارداد باشگاه؛ بازیکنانی که از آکادمی ارتقا می‌یابند در این فهرست دیده می‌شوند.</p>
+              {players.length === 0 ? <p className="muted">هنوز بازیکنی در تیم اصلی ثبت نشده است. از آکادمی بازیکن جذب و ارتقا بده.</p> : <div className="prospects">
+                {players.map((player) => <article className="prospect" key={player.id}>
+                  <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p><small>آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"}</small></div>
+                </article>)}
+              </div>}
+            </section>
             <section className="academy" aria-labelledby="staff-heading">
               <h2 id="staff-heading">مدیریت کادر فنی</h2>
               <p className="muted">استخدام و فسخ قرارداد اعضای کادر. هزینهٔ اولیهٔ قرارداد برابر دو هفته حقوق است.</p>
