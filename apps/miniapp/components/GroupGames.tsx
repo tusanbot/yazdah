@@ -272,7 +272,9 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             <div className="draft-panel">
               <h4>{myTurn ? "نوبت انتخاب شماست" : "در انتظار انتخاب حریف"}</h4>
               <p>در هر دور هر نفر یک بازیکن انتخاب می‌کند. دور اول فقط دروازه‌بان و چهار دور بعد بازیکن خطی انتخاب می‌شود. انتخاب پس از ۳۰ ثانیه به‌صورت خودکار انجام می‌شود.</p>
-              {Object.entries(detail.game.state.availablePools ?? {}).map(([position, cards]) => (
+              {Object.entries(detail.game.state.availablePools ?? {}).filter(([position]) =>
+                detail.game.current_round === 1 ? position === "goalkeeper" : position !== "goalkeeper"
+              ).map(([position, cards]) => (
                 <div className="card-pool" key={position}>
                   <h5>{positionLabels[position] ?? position} · {(cards as any[]).length} بازیکن باقی‌مانده</h5>
                   <div className="card-grid">
@@ -291,11 +293,12 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
           {detail.game.status === "active" && detail.game.game_type === "cards" && (
             <div className="card-grid">
               {(detail.game.state.myHand ?? []).map((card: any) => (
-                <button type="button" className="player-card" key={card.id} disabled={busy || detail.participants.find((p) => p.isMe)?.picks.some((p: any) => p.id === card.id)} onClick={() => void submitAction({ cardId: card.id })}>
+                <button type="button" className="player-card" key={card.id} disabled={busy || detail.game.state.mySelectionSubmitted || detail.participants.find((p) => p.isMe)?.picks.some((p: any) => p.id === card.id)} onClick={() => void submitAction({ cardId: card.id })}>
                   <strong>{card.full_name}</strong><span>{card.overall} قدرت</span><small>{card.rarity === "mythic" ? "افسانه" : "اسطوره"}</small>
                 </button>
               ))}
               <p>در هر یک از پنج دور، از دست خود یک کارت انتخاب کن. کارت افسانه‌ای ۵ امتیاز اضافه دارد.</p>
+              {detail.game.state.mySelectionSubmitted && <p>انتخاب این دور ثبت شده؛ منتظر حریف بمان.</p>}
             </div>
           )}
 
@@ -303,6 +306,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             <div className="action-panel">
               <h4>ضربه پنالتی</h4>
               <p>در هر دور یکی پنالتی می‌زند و دیگری جهت شیرجه را انتخاب می‌کند. نقش‌ها در دور بعد جابه‌جا می‌شوند. انتخاب‌ها هم‌زمان ثبت می‌شوند.</p>
+              <p>نقش شما در این دور: <strong>{detail.game.state.myRole === "shooter" ? "پنالتی‌زن" : "دروازه‌بان"}</strong></p>
               <div className="choice-row">
                 {["left", "center", "right"].map((value) => <button type="button" key={value} disabled={busy || detail.game.state.myActionSubmitted} onClick={() => void submitAction({ choice: value })}>{value === "left" ? "چپ" : value === "center" ? "وسط" : "راست"}</button>)}
               </div>
@@ -315,7 +319,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               <h4>{detail.game.state.currentQuestion.category}</h4>
               <p>{detail.game.state.currentQuestion.prompt}</p>
               <div className="answers">
-                {detail.game.state.currentQuestion.options.map((option: string, index: number) => <button type="button" key={option} disabled={busy} onClick={() => void submitAction({ answer: index })}>{option}</button>)}
+                {detail.game.state.currentQuestion.options.map((option: string, index: number) => <button type="button" key={option} disabled={busy || detail.game.state.myAnswerSubmitted} onClick={() => void submitAction({ answer: index })}>{option}</button>)}
               </div>
             </div>
           )}
@@ -325,8 +329,9 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               <h4>حدس بازیکن</h4>
               <p>با توجه به سرنخ‌ها نام بازیکن را حدس بزن.</p>
               <ul>{(detail.game.state.currentPlayer.clues ?? []).map((clue: string, index: number) => <li key={index}>{clue}</li>)}</ul>
+              {detail.game.state.myAnswerSubmitted && <p>حدس شما ثبت شد؛ منتظر سایر شرکت‌کنندگان بمان.</p>}
               <label>نام بازیکن<input value={guess} onChange={(event) => setGuess(event.target.value)} maxLength={100} /></label>
-              <button type="button" disabled={busy || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: 1 })}>ثبت حدس</button>
+              <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: 1 })}>ثبت حدس</button>
             </div>
           )}
 
