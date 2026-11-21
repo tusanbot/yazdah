@@ -415,7 +415,7 @@ begin
   end loop;
   update public.group_games set state=jsonb_set(state,'{prizeSettled}','true'::jsonb,true) where id=p_game_id;
 end;
-$;
+$$;
 
 create or replace function public.pick_group_draft_player(p_game_id uuid,p_user_id uuid,p_card_id text,p_auto boolean default false)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
@@ -538,7 +538,7 @@ begin
   v_balance:=public.group_wallet_change(p_chat_id,p_user_id,m.reward_coins,'group_mission_reward','mission:'||p_mission_id||':'||v_period||':'||p_user_id::text);
   return v_balance;
 end;
-$;
+$$;
 
 alter table public.group_economies enable row level security;
 alter table public.group_wallets enable row level security;
