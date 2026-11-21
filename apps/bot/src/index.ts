@@ -98,7 +98,7 @@ bot.command("challenge", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\//$/, "")}/internal/telegram-groups/challenge`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({ ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id }),
