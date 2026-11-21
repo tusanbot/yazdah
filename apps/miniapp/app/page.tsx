@@ -25,6 +25,8 @@ type ClubMatch = { id: string; competition_id: string | null; home_club_id: stri
 type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; specialty: string | null; skill: number; weekly_wage: number; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
+type ClubMission = { id: string; title: string; description: string; target_count: number; reward_coins: number; progress: number; claimedAt: string | null };
+type ClubUnion = { id: string; name: string; tag: string; leader_club_id: string; members?: { count: number }[] };
 type ClubProfile = {
   id: string;
   name: string;
@@ -83,6 +85,13 @@ export default function HomePage() {
   const [staffSkill, setStaffSkill] = useState(50);
   const [staffWage, setStaffWage] = useState(500);
   const [staffContract, setStaffContract] = useState("");
+  const [missions, setMissions] = useState<ClubMission[]>([]);
+  const [unions, setUnions] = useState<ClubUnion[]>([]);
+  const [communityBusy, setCommunityBusy] = useState(false);
+  const [communityStatus, setCommunityStatus] = useState("");
+  const [unionName, setUnionName] = useState("");
+  const [unionTag, setUnionTag] = useState("");
+  const [unionJoinId, setUnionJoinId] = useState("");
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
@@ -139,12 +148,76 @@ export default function HomePage() {
       await loadOwnListings(auth.accessToken);
       await loadAcademy(auth.accessToken);
       await loadStaff(auth.accessToken);
+      await loadCommunity(auth.accessToken);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadCommunity(accessToken: string) {
+    const [missionResponse, unionResponse] = await Promise.all([
+      fetch(`${API_URL}/clubs/me/missions`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch(`${API_URL}/unions`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+    ]);
+    const missionBody = await missionResponse.json();
+    const unionBody = await unionResponse.json();
+    if (!missionResponse.ok) throw new Error(missionBody.error ?? "بارگذاری مأموریت‌ها ناموفق بود.");
+    if (!unionResponse.ok) throw new Error(unionBody.error ?? "بارگذاری اتحادیه‌ها ناموفق بود.");
+    setMissions(missionBody.missions as ClubMission[]);
+    setUnions(unionBody.unions as ClubUnion[]);
+  }
+
+  async function claimMission(missionId: string) {
+    if (!session) return;
+    setCommunityBusy(true); setCommunityStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/missions/claim`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ missionId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "mission_incomplete" ? "برای دریافت پاداش، مأموریت را کامل کن." : body.error ?? "دریافت پاداش ناموفق بود.");
+      await loadCommunity(session.accessToken);
+      setCommunityStatus("پاداش مأموریت به موجودی باشگاه اضافه شد.");
+    } catch (error) { setCommunityStatus(error instanceof Error ? error.message : "دریافت پاداش ناموفق بود."); }
+    finally { setCommunityBusy(false); }
+  }
+
+  async function createUnion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    setCommunityBusy(true); setCommunityStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/unions`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ name: unionName.trim(), tag: unionTag.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "union_name_tag_or_membership_conflict" ? "نام یا نشان تکراری است، یا باشگاهت از قبل عضو اتحادیه‌ای است." : body.error ?? "ساخت اتحادیه ناموفق بود.");
+      setUnionName(""); setUnionTag("");
+      await loadCommunity(session.accessToken);
+      setCommunityStatus("اتحادیه ایجاد شد.");
+    } catch (error) { setCommunityStatus(error instanceof Error ? error.message : "ساخت اتحادیه ناموفق بود."); }
+    finally { setCommunityBusy(false); }
+  }
+
+  async function joinUnion(unionId: string) {
+    if (!session) return;
+    setCommunityBusy(true); setCommunityStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clubs/me/unions/join`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ unionId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error === "club_already_in_union" ? "باشگاهت از قبل عضو یک اتحادیه است." : body.error === "union_full" ? "ظرفیت اتحادیه تکمیل شده است." : body.error ?? "پیوستن به اتحادیه ناموفق بود.");
+      await loadCommunity(session.accessToken);
+      setCommunityStatus("باشگاه به اتحادیه پیوست.");
+    } catch (error) { setCommunityStatus(error instanceof Error ? error.message : "پیوستن به اتحادیه ناموفق بود."); }
+    finally { setCommunityBusy(false); }
   }
 
   async function loadMatches(accessToken: string) {
@@ -462,6 +535,33 @@ export default function HomePage() {
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
+            <section className="academy" aria-labelledby="community-heading">
+              <h2 id="community-heading">مأموریت‌ها و اتحادیه‌ها</h2>
+              <h3>مأموریت‌های باشگاه</h3>
+              {missions.length === 0 ? <p className="muted">فعلاً مأموریتی در دسترس نیست.</p> : <div className="prospects">
+                {missions.map((mission) => {
+                  const complete = mission.progress >= mission.target_count;
+                  return <article className="prospect" key={mission.id}>
+                    <div><strong>{mission.title}</strong><p>{mission.description}</p><small>پیشرفت: {mission.progress} از {mission.target_count} · پاداش: {mission.reward_coins.toLocaleString("fa-IR")} سکه</small></div>
+                    <button type="button" disabled={communityBusy || !complete || Boolean(mission.claimedAt)} onClick={() => claimMission(mission.id)}>{mission.claimedAt ? "دریافت‌شده" : complete ? "دریافت پاداش" : "در حال انجام"}</button>
+                  </article>;
+                })}
+              </div>}
+              <h3>اتحادیه‌ها</h3>
+              {unions.length === 0 ? <p className="muted">هنوز اتحادیه‌ای ثبت نشده است.</p> : <div className="prospects">
+                {unions.map((union) => <article className="prospect" key={union.id}>
+                  <div><strong>{union.name} [{union.tag}]</strong><p>اعضا: {union.members?.[0]?.count ?? 0}</p><small>شناسه: {union.id}</small></div>
+                  <button type="button" disabled={communityBusy || union.leader_club_id === clubId} onClick={() => joinUnion(union.id)}>{union.leader_club_id === clubId ? "اتحادیهٔ شما" : "پیوستن"}</button>
+                </article>)}
+              </div>}
+              <form className="recruit-form" onSubmit={createUnion}>
+                <h3>ایجاد اتحادیه</h3>
+                <label>نام اتحادیه<input required minLength={3} maxLength={60} value={unionName} onChange={(event) => setUnionName(event.target.value)} /></label>
+                <label>نشان لاتین (۲ تا ۶ حرف/عدد)<input required minLength={2} maxLength={6} pattern="[A-Za-z0-9]{2,6}" value={unionTag} onChange={(event) => setUnionTag(event.target.value.toUpperCase())} /></label>
+                <button type="submit" disabled={communityBusy}>ایجاد اتحادیه</button>
+              </form>
+              {communityStatus && <p className="notice" role="status">{communityStatus}</p>}
+            </section>
             <section className="training-plan" aria-labelledby="tactics-heading">
               <h2 id="tactics-heading">تاکتیک مسابقه</h2>
               <label>آرایش<select value={tactics.formation} onChange={(event) => setTactics((value) => ({ ...value, formation: event.target.value }))}>
