@@ -718,6 +718,28 @@ app.post<{ Body: { academyPlayerId?: string } }>("/clubs/me/academy/promote", as
   return reply.code(201).send({ playerId: data });
 });
 
+app.get("/clubs/me/finance", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+
+  const [economy, ledger] = await Promise.all([
+    supabase.from("club_economy").select("balance, updated_at").eq("club_id", clubId).single(),
+    supabase.from("ledger_transactions")
+      .select("id, reason, created_at, entries:ledger_entries(amount, memo)")
+      .eq("club_id", clubId).order("created_at", { ascending: false }).limit(50),
+  ]);
+  if (economy.error || ledger.error) {
+    request.log.error({ economy: economy.error, ledger: ledger.error }, "club finance lookup failed");
+    return reply.code(500).send({ error: "club_finance_load_failed" });
+  }
+  return { balance: economy.data.balance, updatedAt: economy.data.updated_at, transactions: ledger.data ?? [] };
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
