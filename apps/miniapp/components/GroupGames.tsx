@@ -126,6 +126,11 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
   }, [chatId, loadOverview]);
 
   useEffect(() => {
+    const gameId = new URLSearchParams(window.location.search).get("gameId");
+    if (chatId && gameId) void openGame(gameId);
+  }, [chatId, openGame]);
+
+  useEffect(() => {
     if (!detail || detail.game.status !== "active") return;
     const timer = window.setInterval(() => {
       void openGame(detail.game.id);
