@@ -114,8 +114,10 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
   }>("/internal/telegram-groups/games", async (request, reply) => {
     if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "group_games_not_configured" });
     const supplied = request.headers["x-bot-internal-secret"];
-    if (typeof supplied !== "string" || supplied.length !== botInternalSecret.length ||
-      !timingSafeEqual(Buffer.from(supplied), Buffer.from(botInternalSecret))) {
+    if (typeof supplied !== "string") return reply.code(401).send({ error: "bot_auth_invalid" });
+    const suppliedBytes = Buffer.from(supplied);
+    const expectedBytes = Buffer.from(botInternalSecret);
+    if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes, expectedBytes)) {
       return reply.code(401).send({ error: "bot_auth_invalid" });
     }
     const { telegramUserId, telegramChatId, gameType, entryFee = 0, maxParticipants = 2, title } = request.body ?? {};
