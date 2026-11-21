@@ -785,6 +785,71 @@ app.get("/unions", async (_request, reply) => {
   return { unions: data ?? [] };
 });
 
+app.post<{ Body: { name?: string; tag?: string } }>("/clubs/me/unions", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { name, tag } = request.body ?? {};
+  if (typeof name !== "string" || name.trim().length < 3 || name.trim().length > 60 ||
+      typeof tag !== "string" || !/^[a-z0-9]{2,6}$/i.test(tag)) return reply.code(400).send({ error: "union_input_invalid" });
+  const { data, error } = await supabase.rpc("create_club_union", { p_club_id: clubId, p_name: name.trim(), p_tag: tag.toUpperCase() });
+  if (error) {
+    if (error.code === "23505") return reply.code(409).send({ error: "union_name_tag_or_membership_conflict" });
+    request.log.error({ err: error }, "union creation failed");
+    return reply.code(500).send({ error: "union_create_failed" });
+  }
+  return reply.code(201).send({ unionId: data });
+});
+
+app.post<{ Body: { unionId?: string } }>("/clubs/me/unions/join", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const unionId = request.body?.unionId;
+  if (typeof unionId !== "string" || !/^[0-9a-f-]{36}$/i.test(unionId)) return reply.code(400).send({ error: "union_id_invalid" });
+  const { error } = await supabase.rpc("join_club_union", { p_club_id: clubId, p_union_id: unionId });
+  if (error) {
+    if (error.code === "23505") return reply.code(409).send({ error: "club_already_in_union" });
+    if (error.code === "22023") return reply.code(409).send({ error: "union_full" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "union_not_found" });
+    request.log.error({ err: error }, "union join failed");
+    return reply.code(500).send({ error: "union_join_failed" });
+  }
+  return { joined: true };
+});
+
+app.post<{ Body: { telegramChatId?: number; opponentClubId?: string; kickoffAt?: string } }>("/clubs/me/group-challenges", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); } catch { return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { telegramChatId, opponentClubId, kickoffAt } = request.body ?? {};
+  if (!Number.isSafeInteger(telegramChatId) || typeof opponentClubId !== "string" ||
+      !/^[0-9a-f-]{36}$/i.test(opponentClubId) || typeof kickoffAt !== "string" ||
+      !Number.isFinite(Date.parse(kickoffAt)) || Date.parse(kickoffAt) <= Date.now()) {
+    return reply.code(400).send({ error: "group_challenge_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("create_group_challenge", {
+    p_telegram_chat_id: telegramChatId, p_challenger_club_id: clubId,
+    p_opponent_club_id: opponentClubId, p_kickoff_at: kickoffAt,
+  });
+  if (error) {
+    if (error.code === "P0002") return reply.code(404).send({ error: "telegram_group_not_linked" });
+    if (error.code === "22023") return reply.code(400).send({ error: "group_challenge_input_invalid" });
+    request.log.error({ err: error }, "group challenge creation failed");
+    return reply.code(500).send({ error: "group_challenge_create_failed" });
+  }
+  return reply.code(201).send({ challengeId: data });
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
