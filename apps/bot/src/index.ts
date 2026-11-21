@@ -69,7 +69,7 @@ bot.command("challenge", async (ctx) => {
     await ctx.reply("اتصال چالش‌ها هنوز در تنظیمات سرویس فعال نشده است.");
     return;
   }
-  const args = ctx.match.trim().split(/\\s+/).filter(Boolean);
+  const args = ctx.match.trim().split(/\s+/).filter(Boolean);
   const action = args[0]?.toLowerCase() === "accept" ? "accept" : "create";
   const payload = action === "accept"
     ? { action, challengeId: args[1] }
