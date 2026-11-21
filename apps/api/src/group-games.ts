@@ -47,10 +47,14 @@ function safeGameState(game: Record<string, any>, userId: string) {
     delete state.answers;
   } else if (game.game_type === "guess") {
     const player = state.players?.[(state.round ?? 1) - 1];
+    const clueLevel = Number(state.hintLevels?.[userId] ?? 1);
     state.currentPlayer = player ? {
-      clues: (player.clues ?? []).slice(0, 1),
+      clues: (player.clues ?? []).slice(0, clueLevel),
+      clueLevel,
+      totalClues: (player.clues ?? []).length,
       round: state.round,
     } : null;
+    delete state.hintLevels;
     state.myAnswerSubmitted = Boolean(state.answers?.[userId]);
     delete state.players;
     delete state.answers;
@@ -318,6 +322,26 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       return data;
     },
   );
+
+  app.post<{ Params: { chatId: string; gameId: string } }>("/groups/:chatId/games/:gameId/hint", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user } = await supabase.from("game_users").select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
+      return reply.code(403).send({ error: "telegram_group_membership_required" });
+    }
+    const { data, error } = await supabase.rpc("reveal_group_guess_hint", {
+      p_game_id: request.params.gameId, p_user_id: userId,
+    });
+    if (error) {
+      const map: Record<string, number> = { "22023": 409, "23505": 409, "42501": 403, P0002: 404 };
+      return reply.code(map[error.code] ?? 500).send({ error: error.message });
+    }
+    return { clueLevel: data };
+  });
 
   app.get<{ Params: { chatId: string } }>("/groups/:chatId/missions", async (request, reply) => {
     if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
