@@ -260,7 +260,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!user || !(await telegramMember(botToken, chatId, Number(user.telegram_user_id))).ok) {
       return reply.code(403).send({ error: "telegram_group_membership_required" });
     }
-    const { data, error } = await supabase.rpc("start_group_game", { p_game_id: request.params.gameId, p_actor_user_id: userId });
+    const { error } = await supabase.rpc("start_group_game", { p_game_id: request.params.gameId, p_actor_user_id: userId });
     if (error) {
       const map: Record<string, number> = { P0002: 404, "22023": 409, "42501": 403 };
       return reply.code(map[error.code] ?? 500).send({ error: error.message });
