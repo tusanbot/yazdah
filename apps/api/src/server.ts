@@ -80,6 +80,12 @@ app.post<{ Body: { telegramUserId?: number; telegramChatId?: number; title?: str
     return reply.code(500).send({ error: "group_linker_club_lookup_failed" });
   }
   if (!membership) return reply.code(409).send({ error: "club_required_before_group_link" });
+  const { data: existingGroup, error: existingGroupError } = await supabase.from("telegram_game_groups")
+    .select("linked_by_user_id").eq("telegram_chat_id", telegramChatId).maybeSingle();
+  if (existingGroupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
+  if (existingGroup && existingGroup.linked_by_user_id !== user.id) {
+    return reply.code(409).send({ error: "telegram_group_already_linked" });
+  }
   const { error } = await supabase.from("telegram_game_groups").upsert({
     telegram_chat_id: telegramChatId,
     title: title.trim(),
