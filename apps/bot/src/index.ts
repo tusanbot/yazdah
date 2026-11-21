@@ -121,7 +121,7 @@ bot.command("group", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/link`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/link`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
