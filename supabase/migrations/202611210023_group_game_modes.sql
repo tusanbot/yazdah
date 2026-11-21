@@ -43,12 +43,10 @@ begin
     v_state:=jsonb_build_object('players',v_cards,'round',1,'answers','{}'::jsonb);
   elsif g.game_type='cards' then
     select jsonb_agg(to_jsonb(x)) into v_cards from (
-      select id,full_name,position_group,overall,rarity,nationality from public.group_legend_cards order by random() limit 20
+      select id,full_name,position_group,overall,rarity,nationality from public.group_legend_cards order by random() limit 10
     ) x;
-    select jsonb_agg(value) into v_hand1 from jsonb_array_elements(v_cards) with ordinality e(value,ordinality) where ordinality<=10;
-    select jsonb_agg(value) into v_hand2 from jsonb_array_elements(v_cards) with ordinality e(value,ordinality) where ordinality>10;
-    v_state:=jsonb_build_object('round',1,'hands',jsonb_build_object(v_users[1]::text,coalesce(v_hand1,'[]'::jsonb),v_users[2]::text,coalesce(v_hand2,'[]'::jsonb)),
-      'selected','{}'::jsonb,'used','[]'::jsonb);
+    v_state:=jsonb_build_object('round',1,'hands',jsonb_build_object(v_users[1]::text,coalesce(v_cards,'[]'::jsonb),v_users[2]::text,coalesce(v_cards,'[]'::jsonb)),
+      'selected','{}'::jsonb,'used',jsonb_build_object(v_users[1]::text,'[]'::jsonb,v_users[2]::text,'[]'::jsonb));
   else
     v_state:=jsonb_build_object('round',1,'actions','{}'::jsonb,'users',to_jsonb(v_users));
   end if;
@@ -100,7 +98,7 @@ begin
 
   if g.game_type='cards' then
     v_hand:=g.state->'hands'->p_user_id::text;
-    v_used:=coalesce(g.state->'used','[]'::jsonb);
+    v_used:=coalesce(g.state->'used'->p_user_id::text,'[]'::jsonb);
     if p_auto then
       select value into v_card from jsonb_array_elements(v_hand)
         where not (v_used ? (value->>'id'))
@@ -133,10 +131,14 @@ begin
         perform public.record_group_mission_event(v_chat,v_users[1],'group_game_completed','group-complete:'||p_game_id);
         return jsonb_build_object('completed',true,'winner',v_winner);
       end if;
-      update public.group_games set state=jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round+1),true),'{used}',v_used,true)
-        ||jsonb_build_object('selected','{}'::jsonb),current_round=v_round+1,deadline_at=now()+interval '30 seconds' where id=p_game_id;
+      update public.group_games set state=jsonb_set(
+        jsonb_set(jsonb_set(state,'{round}',to_jsonb(v_round+1),true),array['used',p_user_id::text],v_used,true),
+        '{selected}','{}'::jsonb,true
+      ),current_round=v_round+1,deadline_at=now()+interval '30 seconds' where id=p_game_id;
     else
-      update public.group_games set state=jsonb_set(jsonb_set(state,'{selected}',v_selected,true),'{used}',v_used,true),deadline_at=now()+interval '30 seconds' where id=p_game_id;
+      update public.group_games set state=jsonb_set(
+        jsonb_set(state,'{selected}',v_selected,true),array['used',p_user_id::text],v_used,true
+      ),deadline_at=now()+interval '30 seconds' where id=p_game_id;
     end if;
     return jsonb_build_object('completed',false,'round',v_round,'scoreAdded',v_score);
 
