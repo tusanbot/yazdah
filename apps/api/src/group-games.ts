@@ -206,7 +206,11 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     return {
       games: (games.data ?? []).map((game) => ({
         ...game,
-        participants: participantMap.get(game.id) ?? [],
+        participants: (participantMap.get(game.id) ?? []).map((participant) =>
+          game.game_type === "cards" && game.status === "active" && participant.user_id !== userId
+            ? { ...participant, score: 0 }
+            : participant
+        ),
         isCreator: game.created_by_user_id === userId,
       })),
       walletBalance: wallet.data?.balance ?? 0,
@@ -256,6 +260,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       game: { ...game, state: safeGameState(game as Record<string, unknown>, userId) },
       participants: (participants ?? []).map((p) => ({
         ...p,
+        score: game.game_type === "cards" && game.status === "active" && p.user_id !== userId ? 0 : p.score,
         picks: game.game_type === "draft" || (game.game_type === "cards" && game.status === "completed") ? p.picks : [],
         isMe: p.user_id === userId,
       })),
