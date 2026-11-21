@@ -58,6 +58,33 @@ bot.callbackQuery("status", async (ctx) => {
   await ctx.answerCallbackQuery({ text: "ربات فعال است." });
 });
 
+
+bot.on("message:new_chat_members", async (ctx) => {
+  const addedBot = ctx.message.new_chat_members.some((member) => member.id === bot.botInfo.id);
+  if (addedBot) {
+    await ctx.reply("ربات یازده به گروه اضافه شد. برای راهنمای چالش‌های گروهی /challenge را بزنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
+      reply_markup: new InlineKeyboard().webApp("باز کردن یازده", miniAppUrl),
+    });
+  }
+});
+
+bot.command("group", async (ctx) => {
+  if (ctx.chat.type === "private") {
+    await ctx.reply("این دستور را داخل گروه تلگرام اجرا کنید تا راهنمای اتصال گروه و رقابت گروهی را ببینید.");
+    return;
+  }
+  const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false);
+  if (!isAdmin) {
+    await ctx.reply("اتصال گروه به بازی باید توسط مالک یا مدیر گروه انجام شود.");
+    return;
+  }
+  await ctx.reply("گروه شناسایی شد. اتصال امن این گروه و مدیریت چالش‌ها از پنل بازی انجام می‌شود؛ این نسخه هنوز اتصال گروه را از داخل تلگرام ثبت نمی‌کند.", {
+    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
+  });
+});
+
 bot.catch((error) => {
   console.error("Telegram bot update failed", error);
 });
