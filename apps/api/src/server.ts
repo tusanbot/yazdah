@@ -740,6 +740,51 @@ app.get("/clubs/me/finance", async (request, reply) => {
   return { balance: economy.data.balance, updatedAt: economy.data.updated_at, transactions: ledger.data ?? [] };
 });
 
+app.get("/clubs/me/missions", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const { data, error } = await supabase.from("mission_definitions")
+    .select("id,title,description,mission_type,target_count,reward_coins,progress:club_mission_progress(progress,claimed_at)")
+    .eq("active", true).order("id");
+  if (error) { request.log.error({ err: error }, "mission list failed"); return reply.code(500).send({ error: "missions_load_failed" }); }
+  return { missions: (data ?? []).map((mission: any) => ({ ...mission, progress: mission.progress?.[0]?.progress ?? 0, claimedAt: mission.progress?.[0]?.claimed_at ?? null })) };
+});
+
+app.post<{ Body: { missionId?: string } }>("/clubs/me/missions/claim", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) { request.log.error({ err: error }, "club ownership lookup failed"); return reply.code(500).send({ error: "club_lookup_failed" }); }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+  const missionId = request.body?.missionId;
+  if (typeof missionId !== "string" || !/^[a-z0-9_]{2,80}$/.test(missionId)) return reply.code(400).send({ error: "mission_id_invalid" });
+  const { data, error } = await supabase.rpc("claim_club_mission", { p_club_id: clubId, p_mission_id: missionId });
+  if (error) {
+    if (error.code === "22023") return reply.code(409).send({ error: "mission_incomplete" });
+    if (error.code === "23505") return reply.code(409).send({ error: "mission_already_claimed" });
+    if (error.code === "P0002") return reply.code(404).send({ error: "mission_unavailable" });
+    request.log.error({ err: error }, "mission reward claim failed");
+    return reply.code(500).send({ error: "mission_claim_failed" });
+  }
+  return { claimed: true, reward: data };
+});
+
+app.get("/unions", async (_request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const { data, error } = await supabase.from("club_unions")
+    .select("id,name,tag,leader_club_id,created_at,members:club_union_members(count)")
+    .order("created_at", { ascending: false }).limit(100);
+  if (error) { app.log.error({ err: error }, "union list failed"); return reply.code(500).send({ error: "unions_load_failed" }); }
+  return { unions: data ?? [] };
+});
+
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
