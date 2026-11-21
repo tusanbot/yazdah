@@ -79,6 +79,19 @@ async function trainPlayersDaily(job: Job) {
   console.info(JSON.stringify({ event: "daily_training_applied", clubId, stateDate, playersImproved: data }));
 }
 
+async function applyDailySponsorship(job: Job) {
+  const clubId = job.payload.club_id;
+  const stateDate = job.payload.state_date;
+  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(stateDate)) {
+    throw new Error("sponsorship_payload_invalid");
+  }
+  const { data, error } = await supabase.rpc("apply_daily_sponsorship", {
+    p_club_id: clubId, p_state_date: stateDate,
+  });
+  if (error) throw new Error(error.message);
+  console.info(JSON.stringify({ event: "daily_sponsorship_applied", clubId, stateDate, income: data }));
+}
+
 async function process(job: Job) {
   switch (job.job_type) {
     case "match.resolve":
@@ -89,6 +102,9 @@ async function process(job: Job) {
       return;
     case "players.training":
       await trainPlayersDaily(job);
+      return;
+    case "club.sponsorship":
+      await applyDailySponsorship(job);
       return;
     default:
       throw new Error(`unsupported_job_type:${job.job_type}`);
@@ -126,6 +142,13 @@ async function enqueueDueWork() {
       idempotency_key: `staff.payroll:${stateDate}:${club.id}`,
     }, { onConflict: "idempotency_key", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
+    const { error: sponsorshipError } = await supabase.from("game_jobs").upsert({
+      job_type: "club.sponsorship",
+      payload: { club_id: club.id, state_date: stateDate },
+      run_at: `${stateDate}T00:05:00.000Z`,
+      idempotency_key: `club.sponsorship:${stateDate}:${club.id}`,
+    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
+    if (sponsorshipError) throw new Error(sponsorshipError.message);
     const { error: trainingError } = await supabase.from("game_jobs").upsert({
       job_type: "players.training",
       payload: { club_id: club.id, state_date: stateDate },
