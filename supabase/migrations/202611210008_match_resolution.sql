@@ -54,8 +54,8 @@ begin
   from public.players where club_id = v_match.away_club_id;
 
   -- Seeded from the immutable match UUID, so retries produce the same score.
-  v_home_seed := (('x' || substr(md5(v_match.id::text || ':home'), 1, 8))::bit(32)::bigint) % 100;
-  v_away_seed := (('x' || substr(md5(v_match.id::text || ':away'), 1, 8))::bit(32)::bigint) % 100;
+  v_home_seed := (('x' || substr(md5(v_match.id::text || ':home'), 1, 7))::bit(32)::bigint) % 100;
+  v_away_seed := (('x' || substr(md5(v_match.id::text || ':away'), 1, 7))::bit(32)::bigint) % 100;
 
   v_home_score := greatest(0, least(5,
     floor((v_home_rating + 4 - v_away_rating + 30) / 25)::integer
