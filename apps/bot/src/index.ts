@@ -25,6 +25,17 @@ function mainMenu() {
 }
 
 bot.command("start", async (ctx) => {
+  const payload = ctx.match.trim();
+  const groupLink = payload.match(/^group_(-?\\d+)(?:_([0-9a-f-]{36}))?$/i);
+  if (groupLink) {
+    const groupChatId = groupLink[1];
+    const gameId = groupLink[2];
+    const appUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${groupChatId}${gameId ? `&gameId=${gameId}` : ""}`;
+    await ctx.reply("برای ورود به فضای گروه و اجرای چالش، مینی‌اپ را باز کن.", {
+      reply_markup: new InlineKeyboard().webApp(gameId ? "ورود به چالش" : "چالش‌ها و مأموریت‌های گروه", appUrl),
+    });
+    return;
+  }
   await ctx.reply(
     "به یازده خوش آمدی! از اینجا می‌توانی وارد باشگاهت شوی و بازی را از ربات یا مینی‌اپ ادامه بدهی.",
     { reply_markup: mainMenu() },
@@ -163,10 +174,12 @@ bot.command("game", async (ctx) => {
       await ctx.reply(messages[body.error ?? ""] ?? "ایجاد چالش ناموفق بود؛ کمی بعد دوباره تلاش کن.");
       return;
     }
-    const gameUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${ctx.chat.id}&gameId=${body.gameId}`;
+    const botInfo = await bot.api.getMe();
+    const startPayload = `group_${ctx.chat.id}_${body.gameId}`;
+    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(startPayload)}`;
     await ctx.reply(
-      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای پیوستن و اجرای چالش، مینی‌اپ گروه را باز کنید.`,
-      { reply_markup: new InlineKeyboard().webApp("ورود به چالش گروه", gameUrl) },
+      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای ورود، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.`,
+      { reply_markup: new InlineKeyboard().url("ورود به چالش", privateLink) },
     );
   } catch (error) {
     console.error("Group game creation failed", error);
@@ -179,9 +192,10 @@ bot.command("games", async (ctx) => {
     await ctx.reply("برای دیدن چالش‌های گروه، این فرمان را داخل گروه تلگرام اجرا کن.");
     return;
   }
-  const gameUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${ctx.chat.id}`;
-  await ctx.reply("چالش‌ها، کیف پول گروه و مأموریت‌های گروهی:", {
-    reply_markup: new InlineKeyboard().webApp("باز کردن چالش‌های گروه", gameUrl),
+  const botInfo = await bot.api.getMe();
+  const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${ctx.chat.id}`)}`;
+  await ctx.reply("برای مشاهده چالش‌ها، کیف پول و مأموریت‌های گروه، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.", {
+    reply_markup: new InlineKeyboard().url("باز کردن چالش‌های گروه", privateLink),
   });
 });
 
