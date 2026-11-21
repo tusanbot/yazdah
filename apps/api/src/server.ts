@@ -327,6 +327,37 @@ app.get("/competitions", async (request, reply) => {
   return { competitions: data ?? [] };
 });
 
+app.post<{ Body: { fullName?: string; birthDate?: string; position?: string; potential?: number } }>("/clubs/me/academy", async (request, reply) => {
+  if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+  const userId = readSession(request.headers.authorization);
+  if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+  let clubId: string | null;
+  try { clubId = await ownedClubId(userId); }
+  catch (error) {
+    request.log.error({ err: error }, "club ownership lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!clubId) return reply.code(404).send({ error: "club_not_found" });
+
+  const { fullName, birthDate, position, potential } = request.body ?? {};
+  if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 80 ||
+      typeof birthDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+      typeof position !== "string" || !["GK","CB","LB","RB","DM","CM","AM","LW","RW","ST"].includes(position) ||
+      !Number.isInteger(potential) || potential! < 1 || potential! > 100) {
+    return reply.code(400).send({ error: "academy_input_invalid" });
+  }
+  const { data, error } = await supabase.rpc("recruit_academy_player", {
+    p_club_id: clubId, p_full_name: fullName.trim(), p_birth_date: birthDate,
+    p_position: position, p_potential: potential,
+  });
+  if (error) {
+    if (error.code === "22023") return reply.code(400).send({ error: "academy_input_invalid" });
+    request.log.error({ err: error }, "academy recruitment failed");
+    return reply.code(500).send({ error: "academy_recruitment_failed" });
+  }
+  return reply.code(201).send({ prospectId: data });
+});
+
 app.get("/clubs/me/academy", async (request, reply) => {
   if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
   const userId = readSession(request.headers.authorization);
