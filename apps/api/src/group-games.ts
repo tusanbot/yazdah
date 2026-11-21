@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -114,7 +115,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "group_games_not_configured" });
     const supplied = request.headers["x-bot-internal-secret"];
     if (typeof supplied !== "string" || supplied.length !== botInternalSecret.length ||
-      !Buffer.from(supplied).equals(Buffer.from(botInternalSecret))) {
+      !timingSafeEqual(Buffer.from(supplied), Buffer.from(botInternalSecret))) {
       return reply.code(401).send({ error: "bot_auth_invalid" });
     }
     const { telegramUserId, telegramChatId, gameType, entryFee = 0, maxParticipants = 2, title } = request.body ?? {};
