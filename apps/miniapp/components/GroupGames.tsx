@@ -409,7 +409,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             <div className="mission-list">
               {walletTransactions.slice(0, 8).map((transaction) => (
                 <article className="wallet-row" key={transaction.id}>
-                  <span>{transaction.reason === "challenge_entry" ? "ورودی چالش" : transaction.reason === "challenge_prize" ? "جایزه چالش" : "پاداش مأموریت"}</span>
+                  <span>{transaction.reason === "challenge_entry" ? "ورودی چالش" : transaction.reason === "challenge_entry_refund" ? "بازگشت ورودی" : transaction.reason === "challenge_prize" ? "جایزه چالش" : "پاداش مأموریت"}</span>
                   <strong className={transaction.amount >= 0 ? "positive" : "negative"}>{transaction.amount > 0 ? "+" : ""}{Number(transaction.amount).toLocaleString("fa-IR")} سکه</strong>
                 </article>
               ))}
