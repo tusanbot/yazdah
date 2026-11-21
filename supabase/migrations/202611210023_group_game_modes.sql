@@ -264,7 +264,7 @@ begin
     if v_done>=v_total then
       if g.game_type='quiz' then
         select correct_index into v_correct from public.group_quiz_questions
-          where id=(g.state->'questions'->(v_round-1)->>'id');
+          where id=((g.state->'questions'->(v_round-1)->>'id')::uuid);
         for v_part in select user_id from public.group_game_participants where game_id=p_game_id loop
           if (v_answers->>(v_part.user_id::text))::int=v_correct then
             update public.group_game_participants set score=score+10 where game_id=p_game_id and user_id=v_part.user_id;
@@ -384,7 +384,7 @@ declare
   g public.group_games%rowtype;
   v_level integer;
   v_total integer;
-  v_player_id text;
+  v_player_id uuid;
 begin
   select * into g from public.group_games where id=p_game_id for update;
   if not found or g.game_type<>'guess' or g.status<>'active' then
@@ -398,7 +398,7 @@ begin
     raise exception 'group_game_action_already_submitted' using errcode='23505';
   end if;
   v_level:=coalesce((g.state->'hintLevels'->>p_user_id::text)::integer,1);
-  v_player_id:=g.state->'players'->((g.state->>'round')::integer-1)->>'id';
+  v_player_id:=(g.state->'players'->((g.state->>'round')::integer-1)->>'id')::uuid;
   select jsonb_array_length(clues) into v_total from public.group_legend_cards where id=v_player_id;
   if v_level>=coalesce(v_total,1) then raise exception 'guess_no_more_hints' using errcode='22023'; end if;
   v_level:=v_level+1;
