@@ -146,7 +146,13 @@ begin
   else
     select count(*) into v_remaining from public.matches
     where competition_id=v_comp.id and status not in ('completed','cancelled');
-    if v_remaining=0 then
+    if v_remaining=0 and not exists (
+      select 1 from public.competition_entries ce
+      where ce.competition_id=v_comp.id
+        and ce.played <> (select count(*) from public.matches m
+          where m.competition_id=v_comp.id and m.status='completed'
+            and (m.home_club_id=ce.club_id or m.away_club_id=ce.club_id))
+    ) then
       update public.competitions c
       set status='completed',
           champion_club_id=(select club_id from public.competition_entries
