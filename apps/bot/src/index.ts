@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const requiredMiniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
+const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
 const apiUrl = process.env.YAZDAH_API_URL;
 const botInternalSecret = process.env.BOT_INTERNAL_SECRET;
 
