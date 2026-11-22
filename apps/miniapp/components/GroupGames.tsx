@@ -97,7 +97,6 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [formation, setFormation] = useState("1-2-1");
   const [guess, setGuess] = useState("");
-  const [choice, setChoice] = useState("center");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
