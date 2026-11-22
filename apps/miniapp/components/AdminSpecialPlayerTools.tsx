@@ -11,7 +11,6 @@ type Reward = { competition_id: string; catalog_player_id: string };
 const packNames: Record<Pack["pack_key"], string> = { epic: "حماسی", legendary: "افسانه‌ای", iconic: "نمادین" };
 
 export default function AdminSpecialPlayerTools({ apiUrl, accessToken }: Props) {
-  const [packs, setPacks] = useState<Pack[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -38,7 +37,6 @@ export default function AdminSpecialPlayerTools({ apiUrl, accessToken }: Props) 
   const load = useCallback(async () => {
     const body = await request("/admin/special-player-tools");
     const nextPacks = body.packs as Pack[];
-    setPacks(nextPacks);
     setCompetitions(body.competitions as Competition[]);
     setPlayers(body.players as Player[]);
     setRewards(body.rewards as Reward[]);
