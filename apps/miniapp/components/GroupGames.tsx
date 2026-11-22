@@ -415,7 +415,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
               {detail.game.state.myAnswerSubmitted && <p>حدس شما ثبت شد؛ منتظر سایر شرکت‌کنندگان بمان.</p>}
               <div className="choice-row">
                 <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || detail.game.state.currentPlayer.clueLevel >= detail.game.state.currentPlayer.totalClues} onClick={() => void revealHint()}>سرنخ بعدی</button>
-                <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: detail.game.state.currentPlayer.clueLevel })}>ثبت حدس</button>
+                <button type="button" disabled={busy || detail.game.state.myAnswerSubmitted || !guess.trim()} onClick={() => void submitAction({ guess, clueLevel: detail.game.state.currentPlayer?.clueLevel ?? 0 })}>ثبت حدس</button>
               </div>
               <label>نام بازیکن<input value={guess} onChange={(event) => setGuess(event.target.value)} maxLength={100} /></label>
             </div>
