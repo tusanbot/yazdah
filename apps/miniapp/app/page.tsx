@@ -655,7 +655,7 @@ export default function HomePage() {
               </ul>}
               {adminStatus && <p className="notice" role="status">{adminStatus}</p>}
             </section>
-            <AdminSpecialPlayerTools apiUrl={API_URL} accessToken={session.accessToken} /></>}
+            {session && <AdminSpecialPlayerTools apiUrl={API_URL} accessToken={session.accessToken} />}</>}
             <section className="academy" aria-labelledby="community-heading">
               <h2 id="community-heading">مأموریت‌ها و اتحادیه‌ها</h2>
               <h3>مأموریت‌های باشگاه</h3>
