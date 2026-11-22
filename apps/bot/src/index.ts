@@ -8,7 +8,7 @@ const botInternalSecret = process.env.BOT_INTERNAL_SECRET;
 if (!token) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
 }
-if (!requiredMiniAppUrl) {
+if (!miniAppUrl) {
   throw new Error("TELEGRAM_MINI_APP_URL is required");
 }
 const requiredMiniAppUrl: string = miniAppUrl;
