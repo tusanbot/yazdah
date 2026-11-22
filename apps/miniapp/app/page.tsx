@@ -632,7 +632,7 @@ export default function HomePage() {
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
-            {adminOverview && <section className="training-plan" aria-labelledby="admin-heading">
+            {adminOverview && <><section className="training-plan" aria-labelledby="admin-heading">
               <h2 id="admin-heading">پنل مدیریت یازده</h2>
               <p className="muted">سطح دسترسی: {adminOverview.role === "super_admin" ? "مدیر ارشد" : "مدیر"}</p>
               <div className="prospects">
@@ -655,7 +655,7 @@ export default function HomePage() {
               </ul>}
               {adminStatus && <p className="notice" role="status">{adminStatus}</p>}
             </section>
-            <AdminSpecialPlayerTools apiUrl={API_URL} accessToken={session.accessToken} />}
+            <AdminSpecialPlayerTools apiUrl={API_URL} accessToken={session.accessToken} /></>}
             <section className="academy" aria-labelledby="community-heading">
               <h2 id="community-heading">مأموریت‌ها و اتحادیه‌ها</h2>
               <h3>مأموریت‌های باشگاه</h3>
@@ -746,7 +746,7 @@ export default function HomePage() {
                     </form></div>
                   <label><input type="checkbox" checked={selectedPlayerIds.includes(player.id)} onChange={(event) => setSelectedPlayerIds((ids) => event.target.checked ? [...ids, player.id] : ids.filter((id) => id !== player.id))} /> انتخاب برای ترکیب</label>
                 </article>)}
-              </div>
+              </div>}
               {contractStatus && <p className="notice" role="status">{contractStatus}</p>}
               <p className="muted">انتخاب‌شده: {selectedPlayerIds.length} از ۱۱</p>
               <button type="button" disabled={lineupBusy || selectedPlayerIds.length !== 11} onClick={saveLineup}>{lineupBusy ? "در حال ذخیره…" : "ذخیره ترکیب اصلی"}</button>
