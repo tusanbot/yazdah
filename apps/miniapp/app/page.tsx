@@ -101,7 +101,6 @@ export default function HomePage() {
   const [communityStatus, setCommunityStatus] = useState("");
   const [unionName, setUnionName] = useState("");
   const [unionTag, setUnionTag] = useState("");
-  const [unionJoinId, setUnionJoinId] = useState("");
   const [groupChallenges, setGroupChallenges] = useState<GroupChallenge[]>([]);
   const [groupChatId, setGroupChatId] = useState("");
   const [opponentClubId, setOpponentClubId] = useState("");
