@@ -1,27 +1,28 @@
 import { Bot, InlineKeyboard } from "grammy";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
+const requiredMiniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
 const apiUrl = process.env.YAZDAH_API_URL;
 const botInternalSecret = process.env.BOT_INTERNAL_SECRET;
 
 if (!token) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
 }
-if (!miniAppUrl) {
+if (!requiredMiniAppUrl) {
   throw new Error("TELEGRAM_MINI_APP_URL is required");
 }
+const requiredMiniAppUrl: string = miniAppUrl;
 
 const bot = new Bot(token);
 
 function mainMenu() {
   return new InlineKeyboard()
-    .webApp("ورود به باشگاه", miniAppUrl)
+    .webApp("ورود به باشگاه", requiredMiniAppUrl)
     .row()
     .text("راهنما", "help")
     .text("وضعیت سرویس", "status")
     .row()
-    .webApp("مدیریت باشگاه", miniAppUrl);
+    .webApp("مدیریت باشگاه", requiredMiniAppUrl);
 }
 
 bot.command("start", async (ctx) => {
@@ -30,7 +31,7 @@ bot.command("start", async (ctx) => {
   if (groupLink) {
     const groupChatId = groupLink[1];
     const gameId = groupLink[2];
-    const appUrl = `${miniAppUrl}${miniAppUrl.includes("?") ? "&" : "?"}groupChatId=${groupChatId}${gameId ? `&gameId=${gameId}` : ""}`;
+    const appUrl = `${requiredMiniAppUrl}${requiredMiniAppUrl.includes("?") ? "&" : "?"}groupChatId=${groupChatId}${gameId ? `&gameId=${gameId}` : ""}`;
     await ctx.reply("برای ورود به فضای گروه و اجرای چالش، مینی‌اپ را باز کن.", {
       reply_markup: new InlineKeyboard().webApp(gameId ? "ورود به چالش" : "چالش‌ها و مأموریت‌های گروه", appUrl),
     });
@@ -56,23 +57,24 @@ bot.command("menu", async (ctx) => {
 
 bot.command("club", async (ctx) => {
   await ctx.reply("برای مدیریت باشگاه، ترکیب، تمرین، مسابقات و بازار، مینی‌اپ را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("ورود به باشگاه", miniAppUrl),
+    reply_markup: new InlineKeyboard().webApp("ورود به باشگاه", requiredMiniAppUrl),
   });
 });
 
 bot.command("missions", async (ctx) => {
   await ctx.reply("مأموریت‌ها و پاداش‌های باشگاه از بخش مدیریت باشگاه در مینی‌اپ قابل پیگیری‌اند.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
+    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
   });
 });
 
 bot.command("union", async (ctx) => {
   await ctx.reply("برای ایجاد یا پیوستن به اتحادیه و دیدن فهرست اتحادیه‌ها، مینی‌اپ را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
+    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
   });
 });
 
 bot.command("challenge", async (ctx) => {
+  if (!ctx.from) return;
   if (ctx.chat.type === "private") {
     await ctx.reply("این دستور را داخل گروهِ متصل به یازده اجرا کن. برای ساخت: /challenge <شناسه‌باشگاه‌حریف> <زمان-ISO> و برای پذیرش: /challenge accept <شناسه‌چالش>");
     return;
@@ -127,6 +129,7 @@ bot.command("challenge", async (ctx) => {
 });
 
 bot.command("game", async (ctx) => {
+  if (!ctx.from) return;
   if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
     await ctx.reply("این فرمان را داخل گروه متصل اجرا کن. نمونه: /game draft 100 یا /game survival 0 20\nانواع: draft، penalty، cards، quiz، guess، survival");
     return;
@@ -209,7 +212,7 @@ bot.command("games", async (ctx) => {
 
 bot.command("market", async (ctx) => {
   await ctx.reply("برای خریدوفروش بازیکنان، بازار نقل‌وانتقالات یازده را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", miniAppUrl),
+    reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", requiredMiniAppUrl),
   });
 });
 
@@ -247,12 +250,13 @@ bot.on("message:new_chat_members", async (ctx) => {
   const addedBot = ctx.message.new_chat_members.some((member) => member.id === bot.botInfo.id);
   if (addedBot) {
     await ctx.reply("ربات یازده به گروه اضافه شد. برای راهنمای چالش‌های گروهی /challenge را بزنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
-      reply_markup: new InlineKeyboard().webApp("باز کردن یازده", miniAppUrl),
+      reply_markup: new InlineKeyboard().webApp("باز کردن یازده", requiredMiniAppUrl),
     });
   }
 });
 
 bot.command("group", async (ctx) => {
+  if (!ctx.from) return;
   if (ctx.chat.type === "private") {
     await ctx.reply("این دستور را داخل گروه تلگرام اجرا کنید تا راهنمای اتصال گروه و رقابت گروهی را ببینید.");
     return;
@@ -291,7 +295,7 @@ bot.command("group", async (ctx) => {
       return;
     }
     await ctx.reply("گروه با موفقیت به یازده متصل شد. از این پس می‌توان چالش‌های گروهی را برای این گروه ثبت کرد.", {
-      reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", miniAppUrl),
+      reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
     });
   } catch (error) {
     console.error("Telegram group linking failed", error);
