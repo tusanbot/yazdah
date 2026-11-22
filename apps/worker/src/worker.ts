@@ -92,7 +92,7 @@ async function applyDailySponsorship(job: Job) {
   console.info(JSON.stringify({ event: "daily_sponsorship_applied", clubId, stateDate, income: data }));
 }
 
-async function process(job: Job) {
+async function processJob(job: Job) {
   switch (job.job_type) {
     case "match.resolve":
       await resolveMatch(job);
@@ -209,7 +209,7 @@ async function pollOnce() {
   if (!job) return false;
 
   try {
-    await process(job);
+    await processJob(job);
     const { error: completeError } = await supabase.rpc("complete_game_job", { p_job_id: job.id });
     if (completeError) throw new Error(completeError.message);
     console.info(JSON.stringify({ event: "job_completed", id: job.id, type: job.job_type }));
