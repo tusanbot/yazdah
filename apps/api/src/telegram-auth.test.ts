@@ -19,7 +19,7 @@ function makeInitData(user: Record<string, unknown>, authDate = now): string {
   const secret = createHmac("sha256", "WebAppData").update(token).digest();
   const hash = createHmac("sha256", secret).update(checkString).digest("hex");
   values.set("hash", hash);
-  return new URLSearchParams(values).toString();
+  return new URLSearchParams([...values.entries()]).toString();
 }
 
 test("accepts valid signed Telegram initData", () => {
