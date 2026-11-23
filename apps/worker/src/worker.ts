@@ -14,7 +14,6 @@ if (!url || !serviceRoleKey) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_
 const supabase = createClient(url, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const pollMs = Math.max(500, Number(process.env.WORKER_POLL_MS ?? 2500));
 const leaseSeconds = Math.min(900, Math.max(10, Number(process.env.WORKER_LEASE_SECONDS ?? 90)));
 let stopping = false;
 
