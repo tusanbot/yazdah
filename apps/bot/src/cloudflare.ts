@@ -1,7 +1,7 @@
 import { bot } from "./index.js";
 
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-let initialized: Promise<void> | undefined;
+let initialized: Promise<unknown> | undefined;
 
 export default {
   async fetch(request: Request): Promise<Response> {
