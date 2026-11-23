@@ -5,8 +5,8 @@ compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]
 
 [vars]
 APP_ENV = "staging"
-TELEGRAM_MINI_APP_URL = "https://REPLACE-WITH-STAGING-MINIAPP-ORIGIN"
-YAZDAH_API_URL = "https://REPLACE-WITH-STAGING-API-ORIGIN"
+TELEGRAM_MINI_APP_URL = "https://football-empire-web-staging.mshmahyar9.workers.dev"
+YAZDAH_API_URL = "https://football-empire-api-staging.mshmahyar9.workers.dev"
 
 [observability]
 enabled = true
