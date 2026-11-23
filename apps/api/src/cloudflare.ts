@@ -1,6 +1,6 @@
 import { app } from "./server.js";
 
-let ready: Promise<void> | undefined;
+let ready: PromiseLike<unknown> | undefined;
 
 export default {
   async fetch(request: Request): Promise<Response> {
