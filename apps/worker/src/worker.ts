@@ -222,22 +222,29 @@ async function pollOnce() {
   return true;
 }
 
-process.on("SIGINT", () => { stopping = true; });
-process.on("SIGTERM", () => { stopping = true; });
-
-let lastScheduledAt = 0;
-while (!stopping) {
-  try {
-    if (Date.now() - lastScheduledAt >= 60_000) {
-      await enqueueDueWork();
-      lastScheduledAt = Date.now();
-    }
-    const expiredGames = await processExpiredGroupGames();
-    const notifications = await deliverTelegramNotifications();
+async function runScheduledBatch() {
+  await enqueueDueWork();
+  await processExpiredGroupGames();
+  await deliverTelegramNotifications();
+  for (let index = 0; index < 10; index += 1) {
     const found = await pollOnce();
-    if (!found && notifications === 0 && expiredGames === 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "worker_poll_error", error: error instanceof Error ? error.message : "unknown" }));
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (!found) break;
   }
 }
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return Response.json({ status: "ok", service: "yazdah-worker" });
+    }
+    return new Response("Not Found", { status: 404 });
+  },
+  scheduled(
+    _controller: { scheduledTime: number },
+    _env: unknown,
+    context: { waitUntil(promise: Promise<unknown>): void },
+  ) {
+    context.waitUntil(runScheduledBatch());
+  },
+};
