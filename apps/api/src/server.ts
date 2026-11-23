@@ -6,7 +6,7 @@ import { verifyTelegramInitData } from "./telegram-auth.js";
 import { registerGroupGameRoutes } from "./group-games.js";
 
 const app = Fastify({ logger: true });
-const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = (process.env.CORS_ORIGIN ?? process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
 await app.register(cors, {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
