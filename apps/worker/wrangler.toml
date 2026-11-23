@@ -1,0 +1,10 @@
+name = "football-empire-web-staging"
+main = "src/worker.ts"
+compatibility_date = "2026-11-23"
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true
