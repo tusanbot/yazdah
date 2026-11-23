@@ -1,4 +1,5 @@
 name: Deploy Cloudflare staging
+# Staging-only deployment; this comment change retriggers deployment after secrets are configured.
 
 on:
   push:
