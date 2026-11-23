@@ -6,8 +6,8 @@ let initialized: Promise<unknown> | undefined;
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") {
-      return Response.json({ status: "ok", service: "yazdah-bot" });
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
+      return Response.json({ status: "ok", service: "yazdah-bot", webhook: "/telegram" });
     }
     if (request.method !== "POST" || url.pathname !== "/telegram") {
       return new Response("Not Found", { status: 404 });
