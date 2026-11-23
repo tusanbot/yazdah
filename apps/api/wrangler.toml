@@ -4,10 +4,6 @@ compatibility_date = "2026-11-23"
 compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup"]
 preview_urls = false
 
-[[migrations]]
-tag = "v1"
-deleted_classes = ["MatchCoordinator"]
-
 [vars]
 APP_ENV = "staging"
 ENVIRONMENT = "staging"
