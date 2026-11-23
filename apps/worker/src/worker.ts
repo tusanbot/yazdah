@@ -15,7 +15,6 @@ const supabase = createClient(url, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 const leaseSeconds = Math.min(900, Math.max(10, Number(process.env.WORKER_LEASE_SECONDS ?? 90)));
-let stopping = false;
 
 async function resolveMatch(job: Job) {
   const matchId = job.payload.match_id;
@@ -110,7 +109,7 @@ async function processJob(job: Job) {
   }
 }
 
-async function enqueueDueWork() {
+async function enqueueDueWork(includeDailyJobs: boolean) {
   const now = new Date().toISOString();
   const { data: matches, error: matchError } = await supabase.from("matches")
     .select("id, kickoff_at")
@@ -128,6 +127,8 @@ async function enqueueDueWork() {
     }, { onConflict: "idempotency_key", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
   }
+
+  if (!includeDailyJobs) return;
 
   const stateDate = now.slice(0, 10);
   const { data: clubs, error: clubsError } = await supabase.from("clubs").select("id").limit(1000);
@@ -222,7 +223,9 @@ async function pollOnce() {
 }
 
 async function runScheduledBatch() {
-  await enqueueDueWork();
+  const now = new Date();
+  const runDailyJobs = now.getUTCHours() === 0 && now.getUTCMinutes() === 5;
+  await enqueueDueWork(runDailyJobs);
   await processExpiredGroupGames();
   await deliverTelegramNotifications();
   for (let index = 0; index < 10; index += 1) {
