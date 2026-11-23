@@ -307,4 +307,4 @@ bot.catch((error) => {
   console.error("Telegram bot update failed", error);
 });
 
-await bot.start();
+export { bot };
