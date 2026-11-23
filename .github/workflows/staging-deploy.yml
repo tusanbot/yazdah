@@ -1,6 +1,9 @@
 name: Deploy Cloudflare staging
 
 on:
+  push:
+    branches:
+      - cloudflare/staging-workers
   workflow_dispatch:
 
 permissions:
@@ -26,19 +29,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify Cloudflare credentials
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing GitHub secret CLOUDFLARE_API_TOKEN" && exit 1)
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing GitHub secret CLOUDFLARE_ACCOUNT_ID" && exit 1)
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Validate workspace build
         run: pnpm build
       - name: Build Mini App for Cloudflare Workers
         run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare build
+      - name: Check Cloudflare deployment credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Build passed. Deployment skipped because CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID is not configured as a GitHub Actions secret."
+          fi
       - name: Deploy API staging Worker
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../api/wrangler.toml
       - name: Deploy Telegram bot staging Worker
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../bot/wrangler.toml
-      - name: Deploy Mini App staging Worker
+      - name: Deploy Mini App and scheduled game processing staging Worker
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
