@@ -1,11 +1,22 @@
 name = "football-empire-api-staging"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-11-23"
-compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup"]
+preview_urls = false
 
 [vars]
 APP_ENV = "staging"
+ENVIRONMENT = "staging"
+NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
+
+[[durable_objects.bindings]]
+name = "MATCH_COORDINATOR"
+class_name = "MatchCoordinator"
+script_name = "football-empire-api-staging"
+
+[triggers]
+crons = ["*/15 * * * *"]
 
 [observability]
 enabled = true
