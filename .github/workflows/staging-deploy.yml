@@ -37,7 +37,7 @@ jobs:
       - name: Validate workspace build
         run: pnpm build
       - name: Build Mini App for Cloudflare Workers
-        run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare build
+        run: pnpm --dir apps/miniapp exec opennextjs-cloudflare build
       - name: Check Cloudflare deployment credentials
         id: credentials
         shell: bash
@@ -50,10 +50,10 @@ jobs:
           fi
       - name: Deploy API staging Worker
         if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
-        run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../api/wrangler.toml
+        run: pnpm --dir apps/miniapp exec wrangler deploy --config ../api/wrangler.toml
       - name: Deploy Telegram bot staging Worker
         if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
-        run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../bot/wrangler.toml
+        run: pnpm --dir apps/miniapp exec wrangler deploy --config ../bot/wrangler.toml
       - name: Deploy Mini App and scheduled game processing staging Worker
         if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
-        run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
+        run: pnpm --dir apps/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
