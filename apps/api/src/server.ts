@@ -10,7 +10,7 @@ import { registerGroupGameRoutes } from "./group-games.js";
 const isCloudflareWorker = typeof navigator !== "undefined" && navigator.userAgent.includes("Cloudflare-Workers");
 const app = Fastify({ logger: !isCloudflareWorker });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
-await app.register(cors, {
+app.register(cors, {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error("origin_not_allowed"), false);
