@@ -5,7 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import { verifyTelegramInitData } from "./telegram-auth.js";
 import { registerGroupGameRoutes } from "./group-games.js";
 
-const app = Fastify({ logger: true });
+// Fastify’s Pino logger is not compatible with the Cloudflare Workers runtime bundle.
+// Keep structured logging enabled for Node deployments, but use Fastify’s no-op logger on Workers.
+const isCloudflareWorker = typeof navigator !== "undefined" && navigator.userAgent.includes("Cloudflare-Workers");
+const app = Fastify({ logger: !isCloudflareWorker });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
 await app.register(cors, {
   origin: (origin, callback) => {
