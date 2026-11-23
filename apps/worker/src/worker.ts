@@ -211,7 +211,7 @@ async function pollOnce() {
   return true;
 }
 
-export export async function runScheduledBatch() {
+export async function runScheduledBatch() {
   const now = new Date();
   const runDailyJobs = now.getUTCHours() === 0 && now.getUTCMinutes() === 5;
   await enqueueDueWork(runDailyJobs);
