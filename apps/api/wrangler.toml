@@ -10,11 +10,6 @@ ENVIRONMENT = "staging"
 NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
 
-[[durable_objects.bindings]]
-name = "MATCH_COORDINATOR"
-class_name = "MatchCoordinator"
-script_name = "football-empire-api-staging"
-
 [triggers]
 crons = ["*/15 * * * *"]
 
