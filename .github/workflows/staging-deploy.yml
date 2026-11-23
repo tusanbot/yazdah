@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - cloudflare/staging-workers
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -46,11 +49,11 @@ jobs:
             echo "::notice::Build passed. Deployment skipped because CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID is not configured as a GitHub Actions secret."
           fi
       - name: Deploy API staging Worker
-        if: steps.credentials.outputs.ready == 'true'
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../api/wrangler.toml
       - name: Deploy Telegram bot staging Worker
-        if: steps.credentials.outputs.ready == 'true'
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../bot/wrangler.toml
       - name: Deploy Mini App and scheduled game processing staging Worker
-        if: steps.credentials.outputs.ready == 'true'
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
         run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
