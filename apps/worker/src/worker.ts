@@ -80,7 +80,7 @@ async function trainPlayersDaily(job: Job) {
 async function applyDailySponsorship(job: Job) {
   const clubId = job.payload.club_id;
   const stateDate = job.payload.state_date;
-  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(stateDate)) {
+  if (typeof clubId !== "string" || typeof stateDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stateDate)) {
     throw new Error("sponsorship_payload_invalid");
   }
   const { data, error } = await supabase.rpc("apply_daily_sponsorship", {
@@ -109,7 +109,7 @@ async function processJob(job: Job) {
   }
 }
 
-async function enqueueDueWork(includeDailyJobs: boolean) {
+async function enqueueDueWork(runDailyJobs: boolean) {
   const now = new Date().toISOString();
   const { data: matches, error: matchError } = await supabase.from("matches")
     .select("id, kickoff_at")
@@ -128,34 +128,23 @@ async function enqueueDueWork(includeDailyJobs: boolean) {
     if (error) throw new Error(error.message);
   }
 
-  if (!includeDailyJobs) return;
-
+  if (!runDailyJobs) return;
   const stateDate = now.slice(0, 10);
   const { data: clubs, error: clubsError } = await supabase.from("clubs").select("id").limit(1000);
   if (clubsError) throw new Error(clubsError.message);
 
   for (const club of clubs ?? []) {
-    const { error } = await supabase.from("game_jobs").upsert({
-      job_type: "staff.payroll",
-      payload: { club_id: club.id, state_date: stateDate },
-      run_at: `${stateDate}T00:05:00.000Z`,
-      idempotency_key: `staff.payroll:${stateDate}:${club.id}`,
-    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
-    if (error) throw new Error(error.message);
-    const { error: sponsorshipError } = await supabase.from("game_jobs").upsert({
-      job_type: "club.sponsorship",
-      payload: { club_id: club.id, state_date: stateDate },
-      run_at: `${stateDate}T00:05:00.000Z`,
-      idempotency_key: `club.sponsorship:${stateDate}:${club.id}`,
-    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
-    if (sponsorshipError) throw new Error(sponsorshipError.message);
-    const { error: trainingError } = await supabase.from("game_jobs").upsert({
-      job_type: "players.training",
-      payload: { club_id: club.id, state_date: stateDate },
-      run_at: `${stateDate}T00:05:00.000Z`,
-      idempotency_key: `players.training:${stateDate}:${club.id}`,
-    }, { onConflict: "idempotency_key", ignoreDuplicates: true });
-    if (trainingError) throw new Error(trainingError.message);
+    const jobs = [
+      { job_type: "staff.payroll", payload: { club_id: club.id, state_date: stateDate }, idempotency_key: `staff.payroll:${stateDate}:${club.id}` },
+      { job_type: "club.sponsorship", payload: { club_id: club.id, state_date: stateDate }, idempotency_key: `club.sponsorship:${stateDate}:${club.id}` },
+      { job_type: "players.training", payload: { club_id: club.id, state_date: stateDate }, idempotency_key: `players.training:${stateDate}:${club.id}` },
+    ];
+    for (const job of jobs) {
+      const { error } = await supabase.from("game_jobs").upsert({
+        ...job, run_at: `${stateDate}T00:05:00.000Z`,
+      }, { onConflict: "idempotency_key", ignoreDuplicates: true });
+      if (error) throw new Error(error.message);
+    }
   }
 }
 
@@ -222,7 +211,7 @@ async function pollOnce() {
   return true;
 }
 
-async function runScheduledBatch() {
+export async function runScheduledBatch() {
   const now = new Date();
   const runDailyJobs = now.getUTCHours() === 0 && now.getUTCMinutes() === 5;
   await enqueueDueWork(runDailyJobs);
