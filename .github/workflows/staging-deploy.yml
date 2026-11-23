@@ -1,0 +1,44 @@
+name: Deploy Cloudflare staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yazdah-cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_PUBLIC_API_URL: https://football-empire-api-staging.mshmahyar9.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Cloudflare credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing GitHub secret CLOUDFLARE_API_TOKEN" && exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing GitHub secret CLOUDFLARE_ACCOUNT_ID" && exit 1)
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Validate workspace build
+        run: pnpm build
+      - name: Build Mini App for Cloudflare Workers
+        run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare build
+      - name: Deploy API staging Worker
+        run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../api/wrangler.toml
+      - name: Deploy Telegram bot staging Worker
+        run: pnpm --filter @yazdah/miniapp exec wrangler deploy --config ../bot/wrangler.toml
+      - name: Deploy Mini App staging Worker
+        run: pnpm --filter @yazdah/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
