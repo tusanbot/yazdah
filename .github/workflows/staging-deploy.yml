@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - cloudflare/staging-workers
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
