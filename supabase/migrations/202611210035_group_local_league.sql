@@ -17,6 +17,26 @@ create table if not exists public.group_local_league_entries (
   unique (telegram_chat_id,club_id)
 );
 
+create or replace function public.join_group_local_league(p_chat_id bigint,p_user_id uuid,p_club_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
+declare v_league public.group_local_leagues%rowtype;
+begin
+  select * into v_league from public.group_local_leagues
+    where telegram_chat_id=p_chat_id for update;
+  if not found then raise exception 'local_league_not_configured' using errcode='P0002'; end if;
+  if not v_league.enabled or v_league.competition_id is not null then
+    raise exception 'local_league_registration_closed' using errcode='22023';
+  end if;
+  if not exists(select 1 from public.club_memberships
+    where club_id=p_club_id and user_id=p_user_id and role='owner') then
+    raise exception 'local_league_club_not_owned' using errcode='42501';
+  end if;
+  insert into public.group_local_league_entries(telegram_chat_id,user_id,club_id)
+    values(p_chat_id,p_user_id,p_club_id);
+  return jsonb_build_object('joined',true,'userId',p_user_id,'clubId',p_club_id);
+end;
+$;
+
 create or replace function public.start_group_local_league(p_chat_id bigint)
 returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
 declare
@@ -60,5 +80,7 @@ alter table public.group_local_leagues enable row level security;
 alter table public.group_local_league_entries enable row level security;
 revoke all on public.group_local_leagues from public,anon,authenticated;
 revoke all on public.group_local_league_entries from public,anon,authenticated;
+revoke all on function public.join_group_local_league(bigint,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.join_group_local_league(bigint,uuid,uuid) to service_role;
 revoke all on function public.start_group_local_league(bigint) from public,anon,authenticated;
 grant execute on function public.start_group_local_league(bigint) to service_role;
