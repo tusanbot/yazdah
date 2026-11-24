@@ -244,7 +244,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
         local_league_full: "ظرفیت لیگ محلی به ۶۴ باشگاه رسیده است.",
         club_required_before_local_league: "ابتدا باشگاهت را بساز و سپس در لیگ محلی ثبت‌نام کن.",
       };
-      setStatus(messages[code] ?? code || "عملیات لیگ محلی ناموفق بود.");
+      setStatus((messages[code] ?? code) || "عملیات لیگ محلی ناموفق بود.");
     } finally {
       setBusy(false);
     }
