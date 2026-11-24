@@ -229,7 +229,7 @@ bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   }
   await ctx.answerCallbackQuery({ text: "در حال ثبت پذیرش…" });
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/challenge`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
