@@ -720,6 +720,31 @@ export default function HomePage() {
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
+            <section id="club-dashboard" className="game-dashboard" aria-label="نمای کلی باشگاه">
+              <div className="club-topline">
+                <div><span className="club-level">سطح {clubProfile?.level ?? 1}</span><h2>{clubProfile?.name ?? "باشگاه من"} {countryFlag(clubProfile?.country_code)}</h2><p>{clubProfile?.city ?? "مرکز تمرین"} · مسیر قهرمانی</p></div>
+                <div className="wallet"><span>🪙 {clubProfile?.economy.balance.toLocaleString("fa-IR") ?? "۰"}</span><small>موجودی باشگاه</small></div>
+              </div>
+              <a className="stadium-hero" href="#matches-heading">
+                <div className="stadium-lights" aria-hidden="true">🏟️</div>
+                <div className="stadium-copy"><span>خانهٔ باشگاه</span><strong>استادیوم و مسابقه</strong><small>برنامه بازی‌ها و مسیر توسعهٔ تیم</small></div>
+                <span className="hero-arrow" aria-hidden="true">‹</span>
+              </a>
+              <div className="dashboard-heading"><h3>مرکز مدیریت</h3><span>همهٔ بخش‌های بازی</span></div>
+              <div className="game-tile-grid">
+                <a className="game-tile tile-club" href="#squad-heading"><span className="tile-icon">⚽</span><strong>باشگاه</strong><small>بازیکنان و ترکیب</small></a>
+                <a className="game-tile tile-stadium" href="#matches-heading"><span className="tile-icon">🏟️</span><strong>استادیوم</strong><small>مسابقات و توسعه</small></a>
+                <a className="game-tile tile-market" href="#market-heading"><span className="tile-icon">🔁</span><strong>نقل‌وانتقالات</strong><small>خرید و فروش بازیکن</small></a>
+                <a className="game-tile tile-missions" href="#community-heading"><span className="tile-icon">🎯</span><strong>مأموریت‌ها</strong><small>چالش و پاداش</small></a>
+                <a className="game-tile tile-competition" href="#matches-heading"><span className="tile-icon">🏆</span><strong>مسابقات</strong><small>برنامه و جدول</small></a>
+                <a className="game-tile tile-shop" href="#market-heading"><span className="tile-icon">🛒</span><strong>فروشگاه</strong><small>بازار بازیکنان</small></a>
+                <a className="game-tile tile-academy" href="#academy-heading"><span className="tile-icon">🎓</span><strong>آکادمی</strong><small>پرورش استعدادها</small></a>
+                <a className="game-tile tile-community" href="#community-heading"><span className="tile-icon">👥</span><strong>اتحادیه و گروه</strong><small>بازی گروهی</small></a>
+              </div>
+            </section>
+            <nav className="game-bottom-nav" aria-label="پیمایش اصلی">
+              <a href="#club-dashboard"><span>⌂</span>خانه</a><a href="#squad-heading"><span>⚽</span>باشگاه</a><a href="#matches-heading"><span>🏆</span>مسابقات</a><a href="#community-heading"><span>🎯</span>مأموریت</a><a href="#market-heading"><span>🛒</span>بازار</a>
+            </nav>
             {adminOverview && <><section className="training-plan" aria-labelledby="admin-heading">
               <h2 id="admin-heading">پنل مدیریت یازده</h2>
               <p className="muted">سطح دسترسی: {adminOverview.role === "super_admin" ? "مدیر ارشد" : "مدیر"}</p>
@@ -957,9 +982,45 @@ export default function HomePage() {
       <style jsx>{`
         :global(*) { box-sizing: border-box; }
         :global(body) { margin: 0; background: #0b1220; color: #edf2f7; font-family: Tahoma, Arial, sans-serif; }
-        .page { min-height: 100vh; display: grid; place-items: center; padding: 24px 14px; }
-        .panel { width: min(100%, 520px); border: 1px solid #263449; border-radius: 24px; background: #121d2e; padding: 28px; box-shadow: 0 24px 70px #0005; }
-        header { margin-bottom: 24px; }
+        .page { min-height: 100vh; display: flex; justify-content: center; padding: 14px 10px 100px; background: radial-gradient(ellipse at 50% 0%, #173b6d 0%, #0b1220 52%); }
+        .panel { width: min(100%, 560px); border: 1px solid #263d5c; border-radius: 26px; background: linear-gradient(180deg, #12243b 0%, #101a2a 100%); padding: 16px; box-shadow: 0 24px 70px #0005; overflow: hidden; }
+        header { margin-bottom: 16px; padding: 12px 10px 16px; border-bottom: 1px solid #2b4261; }
+        .game-dashboard { margin: 12px 0 24px; }
+        .club-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid #36577e; border-radius:18px; background:linear-gradient(120deg,#173b6d,#17243c); }
+        .club-topline h2 { margin:6px 0 2px; font-size:20px; }
+        .club-topline p { margin:0; color:#b9cbe0; font-size:12px; }
+        .club-level { color:#ffcf5b; font-size:11px; font-weight:bold; }
+        .wallet { display:grid; gap:4px; text-align:center; padding:10px; border-radius:12px; background:#0b1728; color:#ffe08a; font-weight:bold; white-space:nowrap; }
+        .wallet small { color:#9fb2c8; font-size:10px; font-weight:normal; }
+        .stadium-hero { position:relative; display:flex; align-items:center; gap:14px; min-height:128px; margin:12px 0 20px; padding:18px; overflow:hidden; text-decoration:none; color:#fff; border:1px solid #4d9cf4; border-radius:20px; background:radial-gradient(ellipse at 78% 18%,#63c8ff88,transparent 35%),linear-gradient(115deg,#103b78,#087e9a 55%,#10375d); box-shadow:inset 0 1px 0 #ffffff40,0 12px 25px #0003; }
+        .stadium-lights { font-size:54px; filter:drop-shadow(0 0 16px #73caff); }
+        .stadium-copy { display:grid; gap:5px; }
+        .stadium-copy span,.stadium-copy small { color:#c5e7ff; font-size:11px; }
+        .stadium-copy strong { font-size:19px; }
+        .hero-arrow { margin-inline-start:auto; font-size:32px; }
+        .dashboard-heading { display:flex; align-items:baseline; justify-content:space-between; margin:0 2px 10px; }
+        .dashboard-heading h3 { margin:0; font-size:16px; }
+        .dashboard-heading span { color:#8fa9c6; font-size:11px; }
+        .game-tile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .game-tile { min-height:108px; display:grid; grid-template-columns:48px 1fr; grid-template-rows:auto auto; align-content:center; align-items:center; column-gap:10px; padding:14px; border:1px solid #ffffff26; border-radius:17px; color:#fff; text-decoration:none; box-shadow:inset 0 1px 0 #ffffff24,0 7px 16px #0002; transition:transform .15s ease,border-color .15s ease; }
+        .game-tile:active { transform:scale(.98); }
+        .tile-icon { grid-row:span 2; display:grid; place-items:center; width:46px; height:46px; border-radius:14px; background:#06172a55; font-size:27px; }
+        .game-tile strong { align-self:end; font-size:14px; }
+        .game-tile small { align-self:start; margin-top:4px; color:#e2edfa; font-size:10px; line-height:1.6; }
+        .tile-club { background:linear-gradient(135deg,#0759b9,#143b72); }
+        .tile-stadium { background:linear-gradient(135deg,#087d50,#124d42); }
+        .tile-market { background:linear-gradient(135deg,#7134b7,#38256f); }
+        .tile-missions { background:linear-gradient(135deg,#c17a0b,#75421b); }
+        .tile-competition { background:linear-gradient(135deg,#247c38,#15502f); }
+        .tile-shop { background:linear-gradient(135deg,#ad267f,#60235f); }
+        .tile-academy { background:linear-gradient(135deg,#087f9c,#164c82); }
+        .tile-community { background:linear-gradient(135deg,#355a9c,#273d6e); }
+        .game-bottom-nav { position:fixed; z-index:20; bottom: max(8px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:min(calc(100% - 20px),540px); display:grid; grid-template-columns:repeat(5,1fr); gap:2px; padding:8px 6px; border:1px solid #4a6283; border-radius:20px; background:#0b1728f2; box-shadow:0 10px 35px #0009; backdrop-filter:blur(14px); }
+        .game-bottom-nav a { display:grid; justify-items:center; gap:3px; color:#b9cce3; text-decoration:none; font-size:10px; }
+        .game-bottom-nav a span { font-size:20px; line-height:1.2; }
+        @media (min-width:700px) { .page { padding-top:28px; } .panel { padding:24px; } .game-tile-grid { gap:14px; } .game-tile { min-height:125px; } }
+        header .eyebrow { letter-spacing:.02em; }
+        h1 { font-size:30px; margin:0; }
         .eyebrow { color: #82b7ff; font-size: 13px; margin: 0 0 8px; }
         h1 { font-size: 36px; margin: 0; }
         .subtitle, .muted, footer { color: #a6b5c9; line-height: 1.8; }
