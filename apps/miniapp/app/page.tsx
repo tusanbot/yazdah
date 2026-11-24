@@ -921,7 +921,7 @@ export default function HomePage() {
                 onChange={(event) => setCountryCode(event.target.value)} placeholder="IR" />
             </label>
             <button type="submit" disabled={busy}>
-              {busy ? "در حال ثبت…" : "ورود با تلگرام و ساخت باشگاه"}
+              {busy ? "در حال ثبت…" : "ساخت باشگاه و شروع بازی"}
             </button>
           </form>
         ) : (
