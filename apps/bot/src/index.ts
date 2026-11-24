@@ -153,7 +153,7 @@ bot.command("challenge", async (ctx) => {
     ? { action, challengeId: args[1] }
     : { action, opponentClubId: args[0], kickoffAt: args[1] };
   if ((action === "accept" && args.length !== 2) || (action === "create" && args.length !== 2)) {
-    await ctx.reply("ساخت چالش: /challenge <شناسه‌باشگاه‌حریف> <زمان-ISO>\nپذیرش چالش: /challenge accept <شناسه‌چالش>\nزمان باید ISO 8601 و در آینده باشد.");
+    await ctx.reply("اطلاعات چالش کامل نیست. از بخش رقابت‌های گروه در مینی‌اپ اقدام کن؛ زمان مسابقه باید در آینده باشد.");
     return;
   }
   try {
@@ -177,8 +177,8 @@ bot.command("challenge", async (ctx) => {
       return;
     }
     await ctx.reply(action === "create"
-      ? `چالش ثبت شد. شناسهٔ چالش: ${body.challengeId}\nبرای پذیرش، مدیر باشگاه حریف باید در همین گروه اجرا کند: /challenge accept ${body.challengeId}`
-      : `چالش پذیرفته شد و مسابقه ساخته شد. شناسهٔ مسابقه: ${body.matchId}`);
+      ? "چالش ثبت شد. مدیر باشگاه حریف می‌تواند آن را از بخش رقابت‌های گروه در مینی‌اپ بررسی و بپذیرد."
+      : "چالش پذیرفته شد و مسابقه ساخته شد.");
   } catch (error) {
     console.error("Telegram group challenge failed", error);
     await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
@@ -188,7 +188,7 @@ bot.command("challenge", async (ctx) => {
 bot.command("game", async (ctx) => {
   if (!ctx.from) return;
   if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
-    await ctx.reply("این فرمان را داخل گروه متصل اجرا کن. نمونه: /game draft 100 یا /game survival 0 20\nانواع: draft، penalty، cards، quiz، guess، survival");
+    await ctx.reply("برای ساخت چالش گروهی، از بخش بازی‌های گروه در مینی‌اپ نوع بازی و ورودی را انتخاب کن.");
     return;
   }
   const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
@@ -217,7 +217,7 @@ bot.command("game", async (ctx) => {
   if (!gameType || !Number.isSafeInteger(entryFee) || entryFee < 0 || entryFee > 1000000 ||
     !Number.isSafeInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 30 ||
     (["draft", "penalty", "cards"].includes(gameType) && maxParticipants !== 2)) {
-    await ctx.reply("فرمت: /game <draft|penalty|cards|quiz|guess|survival> <ورودی‌سکه> [تعداد‌شرکت‌کننده]\nبرای چالش رایگان عدد ورودی را ۰ بگذار. درفت، پنالتی و کارت‌بازی دقیقاً دو نفره‌اند.");
+    await ctx.reply("تنظیمات چالش معتبر نیست. نوع بازی، ورودی سکه و تعداد شرکت‌کنندگان را در مینی‌اپ بررسی کن. درفت، پنالتی و کارت‌بازی دونفره‌اند.");
     return;
   }
   try {
@@ -245,7 +245,7 @@ bot.command("game", async (ctx) => {
     }
     const privateLink = await groupStartUrl(ctx.chat.id, body.gameId);
     await ctx.reply(
-      `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای ورود، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.`,
+      `⚽ چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\n\nبرای پیوستن، دکمهٔ زیر را بزن و در گفت‌وگوی خصوصی ربات ادامه بده.`,
       { reply_markup: new InlineKeyboard().url("ورود به چالش", privateLink) },
     );
   } catch (error) {
