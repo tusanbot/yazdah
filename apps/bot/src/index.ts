@@ -19,6 +19,14 @@ function appSectionUrl(section?: string) {
   return section ? `${requiredMiniAppUrl}#${section}` : requiredMiniAppUrl;
 }
 
+function appUrlWithParams(params: Record<string, string>) {
+  const url = new URL(requiredMiniAppUrl);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
+
 function mainMenu() {
   return new InlineKeyboard()
     .webApp("🏟 ورود به باشگاه", appSectionUrl())
@@ -44,7 +52,7 @@ bot.command("start", async (ctx) => {
   if (groupLink) {
     const groupChatId = groupLink[1];
     const gameId = groupLink[2];
-    const appUrl = `${requiredMiniAppUrl}${requiredMiniAppUrl.includes("?") ? "&" : "?"}groupChatId=${groupChatId}${gameId ? `&gameId=${gameId}` : ""}`;
+    const appUrl = appUrlWithParams({ groupChatId, ...(gameId ? { gameId } : {}) });
     await ctx.reply("برای ورود به فضای گروه و اجرای چالش، مینی‌اپ را باز کن.", {
       reply_markup: new InlineKeyboard().webApp(gameId ? "ورود به چالش" : "چالش‌ها و مأموریت‌های گروه", appUrl),
     });
