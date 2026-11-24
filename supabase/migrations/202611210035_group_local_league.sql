@@ -19,7 +19,7 @@ create table if not exists public.group_local_league_entries (
 
 create or replace function public.join_group_local_league(p_chat_id bigint,p_user_id uuid,p_club_id uuid)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
-declare v_league public.group_local_leagues%rowtype;
+declare v_league public.group_local_leagues%rowtype; v_count integer;
 begin
   select * into v_league from public.group_local_leagues
     where telegram_chat_id=p_chat_id for update;
@@ -31,6 +31,8 @@ begin
     where club_id=p_club_id and user_id=p_user_id and role='owner') then
     raise exception 'local_league_club_not_owned' using errcode='42501';
   end if;
+  select count(*) into v_count from public.group_local_league_entries where telegram_chat_id=p_chat_id;
+  if v_count>=64 then raise exception 'local_league_full' using errcode='22023'; end if;
   insert into public.group_local_league_entries(telegram_chat_id,user_id,club_id)
     values(p_chat_id,p_user_id,p_club_id);
   return jsonb_build_object('joined',true,'userId',p_user_id,'clubId',p_club_id);
