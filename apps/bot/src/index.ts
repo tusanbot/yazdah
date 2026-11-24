@@ -87,9 +87,10 @@ function mainMenu() {
 bot.command("start", async (ctx) => {
   const payload = ctx.match.trim();
   const appLink = payload.match(/^app_([a-z-]+)$/i);
-  if (appLink && appSections.has(appLink[1])) {
+  const appSection = appLink?.[1];
+  if (appSection && appSections.has(appSection)) {
     await ctx.reply("برای ادامه، مینی‌اپ یازده را باز کن.", {
-      reply_markup: await appEntryKeyboard("private", "باز کردن یازده", appLink[1]),
+      reply_markup: await appEntryKeyboard("private", "باز کردن یازده", appSection),
     });
     return;
   }
