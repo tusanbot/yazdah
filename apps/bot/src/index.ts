@@ -65,8 +65,8 @@ function mainMenu() {
     .row()
     .webApp("🎯 تاکتیک", appSectionUrl("tactics-heading"))
     .row()
-    .text("راهنما", "help")
-    .text("وضعیت سرویس", "status");
+    .text("📖 راهنما", "help")
+    .text("🩺 وضعیت سرویس", "status");
 }
 
 bot.command("start", async (ctx) => {
@@ -133,7 +133,7 @@ bot.command("union", async (ctx) => {
 bot.command("challenge", async (ctx) => {
   if (!ctx.from) return;
   if (ctx.chat.type === "private") {
-    await ctx.reply("این دستور را داخل گروهِ متصل به یازده اجرا کن. برای ساخت: /challenge <شناسه‌باشگاه‌حریف> <زمان-ISO> و برای پذیرش: /challenge accept <شناسه‌چالش>");
+    await ctx.reply("برای ساخت یا پذیرش چالش، از بخش رقابت‌های گروه در مینی‌اپ استفاده کن.");
     return;
   }
   const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
@@ -166,7 +166,7 @@ bot.command("challenge", async (ctx) => {
     if (!response.ok) {
       const messages: Record<string, string> = {
         telegram_user_not_registered: "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز.",
-        telegram_group_not_linked: "ابتدا گروه را با دستور /group به یازده متصل کن.",
+        telegram_group_not_linked: "ابتدا گروه را از بخش بازی‌های گروه در مینی‌اپ به یازده متصل کن.",
         telegram_group_owner_required: "فقط مدیری که گروه را به بازی متصل کرده می‌تواند چالش ثبت کند.",
         club_required_before_group_challenge: "ابتدا باشگاهت را در مینی‌اپ ایجاد کن.",
         challenge_opponent_club_required: "این باشگاه، حریف تعیین‌شده برای این چالش نیست.",
@@ -309,31 +309,18 @@ async function getServiceStatus() {
 }
 
 bot.command("status", async (ctx) => {
-  await ctx.reply(await getServiceStatus());
+  await ctx.reply(`🩺 <b>وضعیت سرویس</b>
+${await getServiceStatus()}`, { parse_mode: "HTML" });
 });
 
 
 bot.command("help", async (ctx) => {
   await ctx.reply(
-    `راهنمای یازده
-/start — شروع و ورود به باشگاه
-/menu — نمایش منوی اصلی
-/market — بازار نقل‌وانتقالات
-/squad — ترکیب و بازیکنان
-/matches — مسابقات باشگاه
-/academy — آکادمی
-/staff — کادر فنی
-/tactics — تاکتیک مسابقه
-/status — وضعیت واقعی API و پایگاه داده
-/game — ساخت چالش گروهی (فقط مدیران گروه)
-/games — مشاهده چالش‌ها و مأموریت‌های گروه
-/league — مدیریت لیگ محلی گروه
-/missions — مأموریت‌های باشگاه
-/help — راهنما
+    `📖 <b>راهنمای یازده</b>
+از دکمه‌های زیر برای ورود به بخش‌های بازی استفاده کن.
 
-انواع چالش: draft، penalty، cards، quiz، guess، survival
-نمونه: /game draft 100 یا /game survival 0 20
-مدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.`,
+⚽ رقابت‌های گروهی را مدیران گروه از داخل مینی‌اپ ایجاد و مدیریت می‌کنند.
+🏟️ مدیریت باشگاه و همهٔ بخش‌های بازی در مینی‌اپ در دسترس است.`,
     { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
