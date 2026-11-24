@@ -48,7 +48,7 @@ type ClubProfile = {
   tactics: { formation: string; mentality: string; tempo: string; pressing: string };
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\\/+$/, "");
 
 export default function HomePage() {
   const [clubName, setClubName] = useState("");
@@ -117,7 +117,7 @@ export default function HomePage() {
     // The Telegram script is loaded before hydration, but the WebApp bridge can
     // become available a moment later on slower clients. Give it a short grace period.
     let initData = window.Telegram?.WebApp?.initData;
-    for (let attempt = 0; !initData && attempt < 20; attempt += 1) {
+    for (let attempt = 0; !initData && attempt < 60; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 50));
       initData = window.Telegram?.WebApp?.initData;
     }
