@@ -511,12 +511,16 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!user) return reply.code(404).send({ error: "game_user_not_found" });
     const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
     if (!permission.ok) return reply.code(403).send({ error: "telegram_group_membership_required" });
+    const { data: linkedGroup, error: linkedGroupError } = await supabase.from("telegram_game_groups")
+      .select("telegram_chat_id").eq("telegram_chat_id", chatId).maybeSingle();
+    if (linkedGroupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
+    if (!linkedGroup) return { league: null, entries: [], standings: [], isAdmin: permission.admin, currentUserId: userId, groupLinked: false };
 
     const { data: league, error: leagueError } = await supabase.from("group_local_leagues")
       .select("telegram_chat_id,enabled,activated_by_user_id,activated_at,competition_id")
       .eq("telegram_chat_id", chatId).maybeSingle();
     if (leagueError) return reply.code(500).send({ error: "local_league_load_failed" });
-    if (!league) return { league: null, entries: [], standings: [], isAdmin: permission.admin, currentUserId: userId };
+    if (!league) return { league: null, entries: [], standings: [], isAdmin: permission.admin, currentUserId: userId, groupLinked: true };
 
     const { data: entries, error: entriesError } = await supabase.from("group_local_league_entries")
       .select("user_id,club_id,joined_at,club:clubs(name,slug)")
@@ -534,7 +538,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       if (error) return reply.code(500).send({ error: "local_league_standings_load_failed" });
       standings = data ?? [];
     }
-    return { league, entries: entries ?? [], standings, isAdmin: permission.admin, currentUserId: userId };
+    return { league, entries: entries ?? [], standings, isAdmin: permission.admin, currentUserId: userId, groupLinked: true };
   });
 
   app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/activate", async (request, reply) => {
