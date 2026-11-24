@@ -8,11 +8,7 @@ preview_urls = false
 APP_ENV = "staging"
 ENVIRONMENT = "staging"
 NODE_ENV = "production"
-CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
-
-[[migrations]]
-tag = "v2"
-deleted_classes = ["MatchCoordinator"]
+CORS_ORIGINS = "https://football-empire-web-staging.workers.dev"
 
 [triggers]
 crons = ["*/15 * * * *"]
