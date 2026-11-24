@@ -232,7 +232,19 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
       };
       setStatus(messages[action]);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "عملیات لیگ محلی ناموفق بود.");
+      const code = error instanceof Error ? error.message : "";
+      const messages: Record<string, string> = {
+        telegram_group_admin_required: "فقط مدیران گروه می‌توانند لیگ محلی را فعال، آغاز یا غیرفعال کنند.",
+        telegram_group_not_linked: "ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.",
+        local_league_already_joined: "باشگاه شما قبلاً در لیگ محلی ثبت‌نام کرده است.",
+        local_league_registration_closed: "ثبت‌نام لیگ محلی بسته شده یا لیگ آغاز شده است.",
+        local_league_needs_two_clubs: "برای آغاز لیگ، دست‌کم دو باشگاه باید ثبت‌نام کنند.",
+        local_league_already_started: "لیگ محلی قبلاً آغاز شده است.",
+        local_league_club_not_owned: "فقط مالک باشگاه می‌تواند آن را در لیگ ثبت‌نام کند.",
+        local_league_full: "ظرفیت لیگ محلی به ۶۴ باشگاه رسیده است.",
+        club_required_before_local_league: "ابتدا باشگاهت را بساز و سپس در لیگ محلی ثبت‌نام کن.",
+      };
+      setStatus(messages[code] ?? code || "عملیات لیگ محلی ناموفق بود.");
     } finally {
       setBusy(false);
     }
