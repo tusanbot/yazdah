@@ -15,14 +15,27 @@ const requiredMiniAppUrl: string = miniAppUrl;
 
 const bot = new Bot(token);
 
+function appSectionUrl(section?: string) {
+  return section ? `${requiredMiniAppUrl}#${section}` : requiredMiniAppUrl;
+}
+
 function mainMenu() {
   return new InlineKeyboard()
-    .webApp("ورود به باشگاه", requiredMiniAppUrl)
+    .webApp("🏟 ورود به باشگاه", appSectionUrl())
+    .row()
+    .webApp("👥 ترکیب و بازیکنان", appSectionUrl("squad-heading"))
+    .webApp("⚽ مسابقات", appSectionUrl("matches-heading"))
+    .row()
+    .webApp("🔄 نقل‌وانتقالات", appSectionUrl("market-heading"))
+    .webApp("🎓 آکادمی", appSectionUrl("academy-heading"))
+    .row()
+    .webApp("🧑‍💼 کادر فنی", appSectionUrl("staff-heading"))
+    .webApp("🏆 مأموریت‌ها و گروه", appSectionUrl("community-heading"))
+    .row()
+    .webApp("🎯 تاکتیک", appSectionUrl("tactics-heading"))
     .row()
     .text("راهنما", "help")
-    .text("وضعیت سرویس", "status")
-    .row()
-    .webApp("مدیریت باشگاه", requiredMiniAppUrl);
+    .text("وضعیت سرویس", "status");
 }
 
 bot.command("start", async (ctx) => {

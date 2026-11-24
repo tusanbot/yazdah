@@ -15,7 +15,22 @@ export default {
     if (!webhookSecret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== webhookSecret) {
       return new Response("Unauthorized", { status: 401 });
     }
-    initialized ??= bot.init();
+    initialized ??= (async () => {
+      await bot.init();
+      await bot.api.setMyCommands([
+        { command: "start", description: "شروع و ورود به یازده" },
+        { command: "menu", description: "نمایش منوی کامل بازی" },
+        { command: "club", description: "ورود به مدیریت باشگاه" },
+        { command: "market", description: "بازار نقل‌وانتقالات" },
+        { command: "missions", description: "مأموریت‌های باشگاه" },
+        { command: "union", description: "اتحادیه‌ها" },
+        { command: "group", description: "اتصال گروه تلگرام به یازده" },
+        { command: "game", description: "ساخت چالش گروهی (مدیران)" },
+        { command: "games", description: "چالش‌های گروه" },
+        { command: "challenge", description: "ساخت یا پذیرش مسابقه گروهی" },
+        { command: "help", description: "راهنمای بازی" },
+      ]);
+    })();
     await initialized;
     try {
       const update = await request.json();

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import GroupGames from "../components/GroupGames";
 import AdminSpecialPlayerTools from "../components/AdminSpecialPlayerTools";
 
@@ -113,28 +113,104 @@ export default function HomePage() {
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
+  async function authenticateTelegram(): Promise<AuthResult> {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (!initData) throw new Error("اطلاعات ورود تلگرام دریافت نشد. مینی‌اپ را با دکمه داخل گفت‌وگوی خصوصی ربات باز کن.");
+    if (!API_URL) throw new Error("آدرس API تنظیم نشده است.");
+
+    window.Telegram?.WebApp?.ready?.();
+    window.Telegram?.WebApp?.expand?.();
+
+    const response = await fetch(`${API_URL}/auth/telegram`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "ورود با تلگرام ناموفق بود.");
+    return body as AuthResult;
+  }
+
+  async function loadClubWorkspace(accessToken: string, club: ClubProfile) {
+    setClubId(club.id);
+    setClubProfile(club);
+    setTactics(club.tactics);
+    await Promise.all([
+      loadPlayers(accessToken),
+      loadTrainingPlan(accessToken),
+      loadMatches(accessToken),
+      loadMarket(accessToken),
+      loadOwnListings(accessToken),
+      loadAcademy(accessToken),
+      loadStaff(accessToken),
+      loadCommunity(accessToken),
+      loadAdminOverview(accessToken),
+    ]);
+  }
+
+  useEffect(() => {
+    let active = true;
+    async function initialize() {
+      setBusy(true);
+      setStatus("در حال برقراری ورود امن با تلگرام…");
+      try {
+        const auth = await authenticateTelegram();
+        if (!active) return;
+        setSession(auth);
+
+        const response = await fetch(`${API_URL}/clubs/me`, {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "بررسی باشگاه کاربر ناموفق بود.");
+
+        if (body.club) {
+          await loadClubWorkspace(auth.accessToken, body.club as ClubProfile);
+          if (active) setStatus("خوش آمدی! اطلاعات باشگاهت بارگذاری شد.");
+        } else if (active) {
+          setStatus("ورود امن انجام شد؛ برای شروع، باشگاهت را ثبت کن.");
+        }
+      } catch (error) {
+        if (active) setStatus(error instanceof Error ? error.message : "ورود با تلگرام ناموفق بود.");
+      } finally {
+        if (active) setBusy(false);
+      }
+    }
+    void initialize();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const scrollToSection = () => {
+      const sectionId = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!sectionId || !clubProfile) return;
+      requestAnimationFrame(() => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+    scrollToSection();
+    window.addEventListener("hashchange", scrollToSection);
+    return () => window.removeEventListener("hashchange", scrollToSection);
+  }, [clubProfile]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
     setBusy(true);
     try {
-      const initData = window.Telegram?.WebApp?.initData;
-      if (!initData) throw new Error("این صفحه را از داخل ربات تلگرام باز کنید تا ورود امن فعال شود.");
-      if (!API_URL) throw new Error("آدرس API تنظیم نشده است.");
+      const auth = session ?? await authenticateTelegram();
+      if (!session) setSession(auth);
 
-      window.Telegram?.WebApp?.ready?.();
-      window.Telegram?.WebApp?.expand?.();
-
-      const authResponse = await fetch(`${API_URL}/auth/telegram`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData }),
+      const existingResponse = await fetch(`${API_URL}/clubs/me`, {
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
       });
-      const authBody = await authResponse.json();
-      if (!authResponse.ok) throw new Error(authBody.error ?? "ورود ناموفق بود.");
-
-      const auth = authBody as AuthResult;
-      setSession(auth);
+      const existingBody = await existingResponse.json();
+      if (!existingResponse.ok) throw new Error(existingBody.error ?? "بررسی باشگاه کاربر ناموفق بود.");
+      if (existingBody.club) {
+        await loadClubWorkspace(auth.accessToken, existingBody.club as ClubProfile);
+        setStatus("باشگاه قبلی شما بارگذاری شد.");
+        return;
+      }
 
       const clubResponse = await fetch(`${API_URL}/clubs`, {
         method: "POST",
@@ -151,23 +227,15 @@ export default function HomePage() {
       });
       const clubBody = await clubResponse.json();
       if (!clubResponse.ok) throw new Error(clubBody.error ?? "ثبت باشگاه ناموفق بود.");
-      setClubId(clubBody.clubId);
+
       const profileResponse = await fetch(`${API_URL}/clubs/me`, {
         headers: { Authorization: `Bearer ${auth.accessToken}` },
       });
       const profileBody = await profileResponse.json();
-      if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
-      setClubProfile(profileBody.club as ClubProfile);
-      setTactics(profileBody.club.tactics);
-      await loadPlayers(auth.accessToken);
-      await loadTrainingPlan(auth.accessToken);
-      await loadMatches(auth.accessToken);
-      await loadMarket(auth.accessToken);
-      await loadOwnListings(auth.accessToken);
-      await loadAcademy(auth.accessToken);
-      await loadStaff(auth.accessToken);
-      await loadCommunity(auth.accessToken);
-      await loadAdminOverview(auth.accessToken);
+      if (!profileResponse.ok || !profileBody.club) {
+        throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
+      }
+      await loadClubWorkspace(auth.accessToken, profileBody.club as ClubProfile);
       setStatus("باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
@@ -830,7 +898,7 @@ export default function HomePage() {
               {academyStatus && <p className="notice" role="status">{academyStatus}</p>}
             </section>
           </div>
-        ) : (
+        ) : session ? (
           <form onSubmit={submit}>
             <label>
               نام باشگاه
@@ -853,9 +921,13 @@ export default function HomePage() {
                 onChange={(event) => setCountryCode(event.target.value)} placeholder="IR" />
             </label>
             <button type="submit" disabled={busy}>
-              {busy ? "در حال ثبت…" : "ورود با تلگرام و ساخت باشگاه"}
+              {busy ? "در حال ثبت…" : "ساخت باشگاه و شروع بازی"}
             </button>
           </form>
+        ) : (
+          <div className="muted">
+            {busy ? "در حال ورود امن به یازده…" : "برای شروع، مینی‌اپ را با دکمه ورود به باشگاه در گفت‌وگوی خصوصی ربات باز کن."}
+          </div>
         )}
         {status && <p className="notice" role="status">{status}</p>}
         {session && !clubId && <p className="muted">ورود انجام شده؛ ثبت باشگاه در حال تکمیل است.</p>}

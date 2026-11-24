@@ -8,7 +8,7 @@ preview_urls = false
 APP_ENV = "staging"
 ENVIRONMENT = "staging"
 NODE_ENV = "production"
-CORS_ORIGINS = "https://football-empire-web-staging.workers.dev"
+CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
 
 # Keep the migration ledger aligned with the deployed Worker. The remote Worker
 # is already at v1 and owns the MatchCoordinator namespace. Declare that
