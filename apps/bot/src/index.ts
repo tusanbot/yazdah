@@ -209,8 +209,9 @@ bot.command("game", async (ctx) => {
   const entryFee = args[1] === undefined ? 0 : Number(args[1]);
   const maxParticipants = args[2] === undefined ? 2 : Number(args[2]);
   if (!gameType || !Number.isSafeInteger(entryFee) || entryFee < 0 || entryFee > 1000000 ||
-    !Number.isSafeInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 30) {
-    await ctx.reply("فرمت: /game <draft|penalty|cards|quiz|guess|survival> <ورودی‌سکه> [تعداد‌شرکت‌کننده]\nبرای چالش رایگان عدد ورودی را ۰ بگذار. درفت، پنالتی و کارت بازی دو نفره‌اند.");
+    !Number.isSafeInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 30 ||
+    (["draft", "penalty", "cards"].includes(gameType) && maxParticipants !== 2)) {
+    await ctx.reply("فرمت: /game <draft|penalty|cards|quiz|guess|survival> <ورودی‌سکه> [تعداد‌شرکت‌کننده]\nبرای چالش رایگان عدد ورودی را ۰ بگذار. درفت، پنالتی و کارت‌بازی دقیقاً دو نفره‌اند.");
     return;
   }
   try {
