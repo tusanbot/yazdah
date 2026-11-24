@@ -57,6 +57,16 @@ type Mission = {
   claimedAt: string | null;
   periodKey: string;
 };
+type LocalLeagueEntry = { user_id: string; club_id: string; joined_at: string; club: { name: string; slug: string } | null };
+type LocalLeagueStanding = { club_id: string; points: number; played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; club: { name: string; slug: string } | null };
+type LocalLeagueOverview = {
+  league: { enabled: boolean; competition_id: string | null; activated_at: string | null } | null;
+  entries: LocalLeagueEntry[];
+  standings: LocalLeagueStanding[];
+  isAdmin: boolean;
+  currentUserId: string;
+  groupLinked: boolean;
+};
 type WalletTransaction = { id: string; amount: number; balance_after: number; reason: string; created_at: string };
 type GameDetail = {
   game: GroupGame & { state: GameState };
@@ -66,7 +76,7 @@ type GameDetail = {
   currentUserId: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 const gameLabels: Record<GroupGame["game_type"], string> = {
   draft: "درفت اسطوره‌ها",
   penalty: "چالش پنالتی",
@@ -94,6 +104,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [localLeague, setLocalLeague] = useState<LocalLeagueOverview | null>(null);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [formation, setFormation] = useState("1-2-1");
   const [guess, setGuess] = useState("");
@@ -109,22 +120,50 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     if (!selectedChatId || !accessToken || !API_URL) return;
     setBusy(true);
     setStatus("");
+    const failures: string[] = [];
     try {
-      const [gamesResponse, missionsResponse, walletResponse] = await Promise.all([
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/games`, { headers }),
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/missions`, { headers }),
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/wallet`, { headers }),
+      const requestJson = async (url: string) => {
+        const response = await fetch(url, { headers });
+        return { ok: response.ok, body: await response.json() };
+      };
+      const [gamesResult, missionsResult, walletResult, leagueResult] = await Promise.allSettled([
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/games`),
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/missions`),
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/wallet`),
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/local-league`),
       ]);
-      const gamesBody = await gamesResponse.json();
-      const missionsBody = await missionsResponse.json();
-      const walletBody = await walletResponse.json();
-      if (!gamesResponse.ok) throw new Error(gamesBody.error ?? "بارگذاری چالش‌های گروه ناموفق بود.");
-      if (!missionsResponse.ok) throw new Error(missionsBody.error ?? "بارگذاری مأموریت‌های گروه ناموفق بود.");
-      if (!walletResponse.ok) throw new Error(walletBody.error ?? "بارگذاری کیف پول گروه ناموفق بود.");
-      setGames(gamesBody.games ?? []);
-      setWalletBalance(Number(walletBody.balance ?? gamesBody.walletBalance ?? missionsBody.walletBalance ?? 0));
-      setWalletTransactions(walletBody.transactions ?? []);
-      setMissions(missionsBody.missions ?? []);
+
+      let gamesBody: { games?: GroupGame[]; walletBalance?: number } = {};
+      if (gamesResult.status === "fulfilled" && gamesResult.value.ok) {
+        gamesBody = gamesResult.value.body;
+        setGames(gamesBody.games ?? []);
+      } else {
+        failures.push("چالش‌ها");
+      }
+
+      if (missionsResult.status === "fulfilled" && missionsResult.value.ok) {
+        setMissions(missionsResult.value.body.missions ?? []);
+      } else {
+        failures.push("مأموریت‌ها");
+      }
+
+      if (walletResult.status === "fulfilled" && walletResult.value.ok) {
+        setWalletBalance(Number(walletResult.value.body.balance ?? gamesBody.walletBalance ?? 0));
+        setWalletTransactions(walletResult.value.body.transactions ?? []);
+      } else {
+        failures.push("کیف پول");
+        if (typeof gamesBody.walletBalance === "number") setWalletBalance(gamesBody.walletBalance);
+      }
+
+      if (leagueResult.status === "fulfilled" && leagueResult.value.ok) {
+        setLocalLeague(leagueResult.value.body as LocalLeagueOverview);
+      } else {
+        failures.push("لیگ محلی");
+      }
+
+      setStatus(failures.length
+        ? `بارگذاری این بخش‌ها ناموفق بود: ${failures.join("، ")}. سایر بخش‌های بارگذاری‌شده در دسترس‌اند.`
+        : "");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "ارتباط با گروه برقرار نشد.");
     } finally {
@@ -177,6 +216,38 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? "عملیات ناموفق بود.");
     return result;
+  }
+
+  async function localLeagueAction(action: "activate" | "join" | "start" | "disable") {
+    if (!chatId) return;
+    setBusy(true);
+    try {
+      await post(`/groups/${encodeURIComponent(chatId)}/local-league/${action}`, {});
+      await loadOverview();
+      const messages = {
+        activate: "لیگ محلی فعال شد؛ اعضای گروه می‌توانند ثبت‌نام کنند.",
+        join: "باشگاه شما در لیگ محلی ثبت‌نام شد.",
+        start: "لیگ محلی آغاز شد و برنامه مسابقات ساخته شد.",
+        disable: "ثبت‌نام لیگ محلی غیرفعال شد.",
+      };
+      setStatus(messages[action]);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      const messages: Record<string, string> = {
+        telegram_group_admin_required: "فقط مدیران گروه می‌توانند لیگ محلی را فعال، آغاز یا غیرفعال کنند.",
+        telegram_group_not_linked: "ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.",
+        local_league_already_joined: "باشگاه شما قبلاً در لیگ محلی ثبت‌نام کرده است.",
+        local_league_registration_closed: "ثبت‌نام لیگ محلی بسته شده یا لیگ آغاز شده است.",
+        local_league_needs_two_clubs: "برای آغاز لیگ، دست‌کم دو باشگاه باید ثبت‌نام کنند.",
+        local_league_already_started: "لیگ محلی قبلاً آغاز شده است.",
+        local_league_club_not_owned: "فقط مالک باشگاه می‌تواند آن را در لیگ ثبت‌نام کند.",
+        local_league_full: "ظرفیت لیگ محلی به ۶۴ باشگاه رسیده است.",
+        club_required_before_local_league: "ابتدا باشگاهت را بساز و سپس در لیگ محلی ثبت‌نام کن.",
+      };
+      setStatus((messages[code] ?? code) || "عملیات لیگ محلی ناموفق بود.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function joinGame(game: GroupGame) {
@@ -446,6 +517,28 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
             </div>
           )}
 
+          <section className="local-league">
+            <h3>لیگ محلی گروه</h3>
+            <p>لیگ اختیاری گروه؛ مدیر گروه ثبت‌نام را فعال می‌کند، اعضا با باشگاه خود وارد می‌شوند و مدیر پس از ثبت‌نام حداقل دو باشگاه لیگ را آغاز می‌کند.</p>
+            {!localLeague ? <p className="muted">وضعیت لیگ محلی بارگذاری نشده است.</p> : !localLeague.groupLinked ? <p className="muted">ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.</p> : (
+              <>
+                <p className="league-status">{!localLeague.league ? "لیگ هنوز فعال نشده" : localLeague.league.competition_id ? "لیگ آغاز شده" : localLeague.league.enabled ? "ثبت‌نام فعال است" : "ثبت‌نام غیرفعال است"} · {localLeague.entries.length} باشگاه ثبت‌نام کرده‌اند</p>
+                {!localLeague.league && localLeague.isAdmin && <button type="button" disabled={busy} onClick={() => void localLeagueAction("activate")}>فعال‌سازی لیگ محلی</button>}
+                {localLeague.league?.enabled && !localLeague.league.competition_id && !localLeague.entries.some((entry) => entry.user_id === localLeague.currentUserId) && <button type="button" disabled={busy} onClick={() => void localLeagueAction("join")}>ثبت‌نام باشگاه من</button>}
+                {localLeague.isAdmin && localLeague.league?.enabled && !localLeague.league.competition_id && localLeague.entries.length >= 2 && <button type="button" disabled={busy} onClick={() => void localLeagueAction("start")}>شروع لیگ و ساخت برنامه</button>}
+                {localLeague.isAdmin && localLeague.league?.enabled && !localLeague.league.competition_id && <button type="button" className="cancel" disabled={busy} onClick={() => void localLeagueAction("disable")}>غیرفعال‌کردن ثبت‌نام</button>}
+                {localLeague.entries.length > 0 && <div className="league-entries">{localLeague.entries.map((entry) => <div className="wallet-row" key={entry.club_id}><span>{entry.club?.name ?? entry.club_id}</span><small>{entry.club?.slug ?? ""}</small></div>)}</div>}
+                {localLeague.standings.length > 0 && <div className="league-standings">
+                  <h4>جدول لیگ</h4>
+                  {localLeague.standings.map((row, index) => <div className="wallet-row" key={row.club_id}>
+                    <span>{index + 1}. {row.club?.name ?? row.club_id}</span>
+                    <strong>{row.points} امتیاز · {row.played} بازی · تفاضل {row.goals_for - row.goals_against}</strong>
+                  </div>)}
+                </div>}
+              </>
+            )}
+          </section>
+
           <h3>گردش کیف پول گروه</h3>
           {walletTransactions.length === 0 ? <p className="muted">هنوز تراکنشی ثبت نشده است.</p> : (
             <div className="mission-list">
@@ -480,6 +573,10 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
       )}
 
       <style jsx>{`
+        .local-league { margin:14px 0 18px; padding:14px; border:1px solid #435a78; border-radius:12px; background:#142238; }
+        .local-league > button { margin:4px; }
+        .league-entries,.league-standings { display:grid; gap:8px; margin-top:12px; }
+        .league-status { color:#d7e5f8; font-weight:bold; }
         .group-games { margin-top: 22px; padding: 18px; border: 1px solid #34465f; border-radius: 16px; background: #0e1928; }
         .group-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
         h2,h3,h4,h5 { margin: 0 0 10px; }

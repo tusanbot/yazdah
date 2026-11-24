@@ -5,9 +5,12 @@ import { createClient } from "@supabase/supabase-js";
 import { verifyTelegramInitData } from "./telegram-auth.js";
 import { registerGroupGameRoutes } from "./group-games.js";
 
-const app = Fastify({ logger: true });
+// Fastify’s Pino logger is not compatible with the Cloudflare Workers runtime bundle.
+// Keep structured logging enabled for Node deployments, but use Fastify’s no-op logger on Workers.
+const isCloudflareWorker = typeof navigator !== "undefined" && navigator.userAgent.includes("Cloudflare-Workers");
+const app = Fastify({ logger: !isCloudflareWorker });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
-await app.register(cors, {
+app.register(cors, {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error("origin_not_allowed"), false);
@@ -1345,12 +1348,4 @@ app.post<{ Body: { challengeId?: string; kickoffAt?: string } }>("/clubs/me/grou
 
 registerGroupGameRoutes(app, { supabase, readSession, botInternalSecret, botToken });
 
-const port = Number(process.env.PORT ?? 3000);
-const host = process.env.HOST ?? "0.0.0.0";
-
-try {
-  await app.listen({ port, host });
-} catch (error) {
-  app.log.error(error);
-  process.exitCode = 1;
-}
+export { app };

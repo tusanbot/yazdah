@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import GroupGames from "../components/GroupGames";
 import AdminSpecialPlayerTools from "../components/AdminSpecialPlayerTools";
 
@@ -24,7 +24,7 @@ type MarketListing = { id: string; asking_price: number; listed_at: string; play
 type OwnListing = { id: string; player_id: string; asking_price: number; status: string };
 type Standing = { club_id: string; points: number; played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; club: { name: string; slug: string } | null };
 type ClubMatch = { id: string; competition_id: string | null; home_club_id: string; away_club_id: string; kickoff_at: string; status: string; home_score: number | null; away_score: number | null; competition: { name: string; competition_type: string; season: number } | null };
-type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; player_class: "ordinary" | "professional" | "special"; ordinary_tier: "base" | "prospect" | "elite" | null; release_clause: number; acquisition_source: string; squad_slot: { slot_no: number }[] | null };
+type SquadPlayer = { id: string; full_name: string; nationality_code: string | null; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; player_class: "ordinary" | "professional" | "special"; ordinary_tier: "base" | "prospect" | "elite" | null; release_clause: number; acquisition_source: string; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; staff_tier: "ordinary" | "professional" | "legendary"; specialty: string | null; skill: number; weekly_wage: number; signing_fee: number; generated_source: string; effect_profile: Record<string, number>; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubMission = { id: string; title: string; description: string; target_count: number; reward_coins: number; progress: number; claimedAt: string | null };
@@ -48,7 +48,12 @@ type ClubProfile = {
   tactics: { formation: string; mentality: string; tempo: string; pressing: string };
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+function countryFlag(code?: string | null): string {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
+  return String.fromCodePoint(...code.toUpperCase().split("").map((char) => 127397 + char.charCodeAt(0)));
+}
+
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
 export default function HomePage() {
   const [clubName, setClubName] = useState("");
@@ -113,28 +118,118 @@ export default function HomePage() {
 
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
+  async function authenticateTelegram(): Promise<AuthResult> {
+    // The Telegram script is loaded before hydration, but the WebApp bridge can
+    // become available a moment later on slower clients. Give it a short grace period.
+    let initData = window.Telegram?.WebApp?.initData;
+    for (let attempt = 0; !initData && attempt < 60; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+      initData = window.Telegram?.WebApp?.initData;
+    }
+    if (!initData) throw new Error("اطلاعات ورود تلگرام دریافت نشد. لینک مینی‌اپ را از دکمهٔ داخل گفت‌وگوی خصوصی ربات باز کن و مطمئن شو ربات و دامنهٔ مینی‌اپ درست تنظیم شده‌اند.");
+    if (!API_URL) throw new Error("آدرس API تنظیم نشده است.");
+
+    window.Telegram?.WebApp?.ready?.();
+    window.Telegram?.WebApp?.expand?.();
+
+    const response = await fetch(`${API_URL}/auth/telegram`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "ورود با تلگرام ناموفق بود.");
+    return body as AuthResult;
+  }
+
+  async function loadClubWorkspace(accessToken: string, club: ClubProfile): Promise<string[]> {
+    setClubId(club.id);
+    setClubProfile(club);
+    setTactics(club.tactics);
+
+    const sections = [
+      ["ترکیب و بازیکنان", () => loadPlayers(accessToken)],
+      ["تمرین", () => loadTrainingPlan(accessToken)],
+      ["مسابقات", () => loadMatches(accessToken)],
+      ["بازار نقل‌وانتقالات", () => loadMarket(accessToken)],
+      ["آگهی‌های باشگاه", () => loadOwnListings(accessToken)],
+      ["آکادمی", () => loadAcademy(accessToken)],
+      ["کادر فنی", () => loadStaff(accessToken)],
+      ["جامعه و بازی‌های گروهی", () => loadCommunity(accessToken)],
+      ["پنل مدیریت", () => loadAdminOverview(accessToken)],
+    ] as const;
+
+    const results = await Promise.allSettled(sections.map(([, load]) => load()));
+    return results.flatMap((result, index) => result.status === "rejected" ? [sections[index][0]] : []);
+  }
+
+  useEffect(() => {
+    let active = true;
+    async function initialize() {
+      setBusy(true);
+      setStatus("در حال برقراری ورود امن با تلگرام…");
+      try {
+        const auth = await authenticateTelegram();
+        if (!active) return;
+        setSession(auth);
+
+        const response = await fetch(`${API_URL}/clubs/me`, {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "بررسی باشگاه کاربر ناموفق بود.");
+
+        if (body.club) {
+          const failedSections = await loadClubWorkspace(auth.accessToken, body.club as ClubProfile);
+          if (active) setStatus(failedSections.length
+            ? `وارد باشگاه شدی؛ بارگذاری این بخش‌ها ناموفق بود: ${failedSections.join("، ")}. می‌توانی بخش‌های دیگر را استفاده کنی و بعد دوباره تلاش کنی.`
+            : "خوش آمدی! اطلاعات باشگاهت بارگذاری شد.");
+        } else if (active) {
+          setStatus("ورود امن انجام شد؛ برای شروع، باشگاهت را ثبت کن.");
+        }
+      } catch (error) {
+        if (active) setStatus(error instanceof Error ? error.message : "ورود با تلگرام ناموفق بود.");
+      } finally {
+        if (active) setBusy(false);
+      }
+    }
+    void initialize();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const scrollToSection = () => {
+      const sectionId = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!sectionId || !clubProfile) return;
+      requestAnimationFrame(() => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+    scrollToSection();
+    window.addEventListener("hashchange", scrollToSection);
+    return () => window.removeEventListener("hashchange", scrollToSection);
+  }, [clubProfile]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
     setBusy(true);
     try {
-      const initData = window.Telegram?.WebApp?.initData;
-      if (!initData) throw new Error("این صفحه را از داخل ربات تلگرام باز کنید تا ورود امن فعال شود.");
-      if (!API_URL) throw new Error("آدرس API تنظیم نشده است.");
+      const auth = session ?? await authenticateTelegram();
+      if (!session) setSession(auth);
 
-      window.Telegram?.WebApp?.ready?.();
-      window.Telegram?.WebApp?.expand?.();
-
-      const authResponse = await fetch(`${API_URL}/auth/telegram`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData }),
+      const existingResponse = await fetch(`${API_URL}/clubs/me`, {
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
       });
-      const authBody = await authResponse.json();
-      if (!authResponse.ok) throw new Error(authBody.error ?? "ورود ناموفق بود.");
-
-      const auth = authBody as AuthResult;
-      setSession(auth);
+      const existingBody = await existingResponse.json();
+      if (!existingResponse.ok) throw new Error(existingBody.error ?? "بررسی باشگاه کاربر ناموفق بود.");
+      if (existingBody.club) {
+        const failedSections = await loadClubWorkspace(auth.accessToken, existingBody.club as ClubProfile);
+        setStatus(failedSections.length
+          ? `باشگاه قبلی بارگذاری شد؛ بعضی بخش‌ها در دسترس نیستند: ${failedSections.join("، ")}.`
+          : "باشگاه قبلی شما بارگذاری شد.");
+        return;
+      }
 
       const clubResponse = await fetch(`${API_URL}/clubs`, {
         method: "POST",
@@ -151,24 +246,18 @@ export default function HomePage() {
       });
       const clubBody = await clubResponse.json();
       if (!clubResponse.ok) throw new Error(clubBody.error ?? "ثبت باشگاه ناموفق بود.");
-      setClubId(clubBody.clubId);
+
       const profileResponse = await fetch(`${API_URL}/clubs/me`, {
         headers: { Authorization: `Bearer ${auth.accessToken}` },
       });
       const profileBody = await profileResponse.json();
-      if (!profileResponse.ok) throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
-      setClubProfile(profileBody.club as ClubProfile);
-      setTactics(profileBody.club.tactics);
-      await loadPlayers(auth.accessToken);
-      await loadTrainingPlan(auth.accessToken);
-      await loadMatches(auth.accessToken);
-      await loadMarket(auth.accessToken);
-      await loadOwnListings(auth.accessToken);
-      await loadAcademy(auth.accessToken);
-      await loadStaff(auth.accessToken);
-      await loadCommunity(auth.accessToken);
-      await loadAdminOverview(auth.accessToken);
-      setStatus("باشگاه با موفقیت ساخته شد.");
+      if (!profileResponse.ok || !profileBody.club) {
+        throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
+      }
+      const failedSections = await loadClubWorkspace(auth.accessToken, profileBody.club as ClubProfile);
+      setStatus(failedSections.length
+        ? `باشگاه ساخته شد؛ بارگذاری این بخش‌ها ناموفق بود: ${failedSections.join("، ")}.`
+        : "باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
@@ -626,11 +715,36 @@ export default function HomePage() {
             <h2>باشگاه ثبت شد</h2>
             <p>شناسه باشگاه: <code>{clubId}</code></p>
             {clubProfile && <>
-              <p>نام باشگاه: {clubProfile.name}</p>
+              <p>نام باشگاه: {countryFlag(clubProfile.country_code) && <span aria-label={`پرچم ${clubProfile.country_code}`} title={clubProfile.country_code}>{countryFlag(clubProfile.country_code)} </span>}{clubProfile.name}</p>
               <p>سطح: {clubProfile.level} · اعتبار: {clubProfile.reputation}</p>
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
             </>}
+            <section id="club-dashboard" className="game-dashboard" aria-label="نمای کلی باشگاه">
+              <div className="club-topline">
+                <div><span className="club-level">سطح {clubProfile?.level ?? 1}</span><h2>{clubProfile?.name ?? "باشگاه من"} {countryFlag(clubProfile?.country_code)}</h2><p>{clubProfile?.city ?? "مرکز تمرین"} · مسیر قهرمانی</p></div>
+                <div className="wallet"><span>🪙 {clubProfile?.economy.balance.toLocaleString("fa-IR") ?? "۰"}</span><small>موجودی باشگاه</small></div>
+              </div>
+              <a className="stadium-hero" href="#matches-heading">
+                <div className="stadium-lights" aria-hidden="true">🏟️</div>
+                <div className="stadium-copy"><span>خانهٔ باشگاه</span><strong>استادیوم و مسابقه</strong><small>برنامه بازی‌ها و مسیر توسعهٔ تیم</small></div>
+                <span className="hero-arrow" aria-hidden="true">‹</span>
+              </a>
+              <div className="dashboard-heading"><h3>مرکز مدیریت</h3><span>همهٔ بخش‌های بازی</span></div>
+              <div className="game-tile-grid">
+                <a className="game-tile tile-club" href="#squad-heading"><span className="tile-icon">⚽</span><strong>باشگاه</strong><small>بازیکنان و ترکیب</small></a>
+                <a className="game-tile tile-stadium" href="#matches-heading"><span className="tile-icon">🏟️</span><strong>استادیوم</strong><small>مسابقات و توسعه</small></a>
+                <a className="game-tile tile-market" href="#market-heading"><span className="tile-icon">🔁</span><strong>نقل‌وانتقالات</strong><small>خرید و فروش بازیکن</small></a>
+                <a className="game-tile tile-missions" href="#community-heading"><span className="tile-icon">🎯</span><strong>مأموریت‌ها</strong><small>چالش و پاداش</small></a>
+                <a className="game-tile tile-competition" href="#matches-heading"><span className="tile-icon">🏆</span><strong>مسابقات</strong><small>برنامه و جدول</small></a>
+                <a className="game-tile tile-shop" href="#market-heading"><span className="tile-icon">🛒</span><strong>فروشگاه</strong><small>بازار بازیکنان</small></a>
+                <a className="game-tile tile-academy" href="#academy-heading"><span className="tile-icon">🎓</span><strong>آکادمی</strong><small>پرورش استعدادها</small></a>
+                <a className="game-tile tile-community" href="#community-heading"><span className="tile-icon">👥</span><strong>اتحادیه و گروه</strong><small>بازی گروهی</small></a>
+              </div>
+            </section>
+            <nav className="game-bottom-nav" aria-label="پیمایش اصلی">
+              <a href="#club-dashboard"><span>⌂</span>خانه</a><a href="#squad-heading"><span>⚽</span>باشگاه</a><a href="#matches-heading"><span>🏆</span>مسابقات</a><a href="#community-heading"><span>🎯</span>مأموریت</a><a href="#market-heading"><span>🛒</span>بازار</a>
+            </nav>
             {adminOverview && <><section className="training-plan" aria-labelledby="admin-heading">
               <h2 id="admin-heading">پنل مدیریت یازده</h2>
               <p className="muted">سطح دسترسی: {adminOverview.role === "super_admin" ? "مدیر ارشد" : "مدیر"}</p>
@@ -737,7 +851,7 @@ export default function HomePage() {
               </div>
               {players.length === 0 ? <p className="muted">هنوز بازیکنی در تیم اصلی ثبت نشده است. از آکادمی بازیکن جذب و ارتقا بده.</p> : <div className="prospects">
                 {players.map((player) => <article className="prospect" key={player.id}>
-                  <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential} · {player.player_class === "special" ? "ویژه" : player.player_class === "professional" ? "حرفه‌ای" : ({base:"پایه",prospect:"مستعد",elite:"نخبه"} as Record<string,string>)[player.ordinary_tier ?? "base"]}</p><small>رضایت‌نامه {Number(player.release_clause).toLocaleString("fa-IR")} سکه · آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"} · قرارداد تا {player.contract_until ?? "نامشخص"} · دستمزد هفتگی {Number(player.weekly_wage).toLocaleString("fa-IR")}</small>
+                  <div><strong>{countryFlag(player.nationality_code) && <span aria-label={`پرچم ${player.nationality_code}`} title={player.nationality_code}>{countryFlag(player.nationality_code)} </span>}{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential} · {player.player_class === "special" ? "ویژه" : player.player_class === "professional" ? "حرفه‌ای" : ({base:"پایه",prospect:"مستعد",elite:"نخبه"} as Record<string,string>)[player.ordinary_tier ?? "base"]}</p><small>رضایت‌نامه {Number(player.release_clause).toLocaleString("fa-IR")} سکه · آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"} · قرارداد تا {player.contract_until ?? "نامشخص"} · دستمزد هفتگی {Number(player.weekly_wage).toLocaleString("fa-IR")}</small>
                     <form className="contract-form" onSubmit={(event) => renewPlayerContract(event, player.id)}>
                       <label>تمدید تا<input required name="contractUntil" type="date" defaultValue={player.contract_until ?? ""} /></label>
                       <label>حقوق هفتگی<input required name="weeklyWage" type="number" min={0} max={100000000} defaultValue={player.weekly_wage} /></label>
@@ -782,11 +896,11 @@ export default function HomePage() {
               <h2 id="market-heading">بازار نقل‌وانتقالات</h2>
               <p className="muted">بازیکن بفروش یا با موجودی باشگاه بازیکن بخَر. خریدوفروش و تسویهٔ مالی در یک تراکنش انجام می‌شود.</p>
               <h3>آگهی‌های باشگاه</h3>
-              {ownListings.length === 0 ? <p className="muted">آگهی فعالی ندارید.</p> : <div className="prospects">{ownListings.map((listing) => { const player = players.find((item) => item.id === listing.player_id); return <article className="prospect" key={listing.id}><div><strong>{player?.full_name ?? "بازیکن"}</strong><p>قیمت درخواستی: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy} onClick={() => withdrawListing(listing.id)}>برداشتن آگهی</button></article>; })}</div>}
+              {ownListings.length === 0 ? <p className="muted">آگهی فعالی ندارید.</p> : <div className="prospects">{ownListings.map((listing) => { const player = players.find((item) => item.id === listing.player_id); return <article className="prospect" key={listing.id}><div><strong>{player && countryFlag(player.nationality_code) && <span aria-label={`پرچم ${player.nationality_code}`} title={player.nationality_code}>{countryFlag(player.nationality_code)} </span>}{player?.full_name ?? "بازیکن"}</strong><p>قیمت درخواستی: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy} onClick={() => withdrawListing(listing.id)}>برداشتن آگهی</button></article>; })}</div>}
               <h3>بازیکنان قابل فروش</h3>
               {players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).length === 0 ? <p className="muted">بازیکن قابل فروش دیگری ندارید.</p> : <div className="prospects">{players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).map((player) => <article className="prospect" key={player.id}><div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p></div><label>قیمت فروش<input type="number" min={1} step={1} value={marketPrices[player.id] ?? ""} onChange={(event) => setMarketPrices((prices) => ({ ...prices, [player.id]: event.target.value }))} /></label><button type="button" disabled={marketBusy} onClick={() => listPlayer(player.id)}>ثبت آگهی</button></article>)}</div>}
               <h3>آگهی‌های بازار</h3>
-              {marketListings.length === 0 ? <p className="muted">در حال حاضر آگهی فعالی وجود ندارد.</p> : <div className="prospects">{marketListings.map((listing) => <article className="prospect" key={listing.id}><div><strong>{listing.player.full_name}</strong><p>{listing.player.position} · قدرت {listing.player.overall} · پتانسیل {listing.player.potential}</p><small>باشگاه فروشنده: {listing.seller.name}</small><p>قیمت: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy || listing.seller.id === clubId} onClick={() => buyListing(listing.id)}>{listing.seller.id === clubId ? "آگهی شما" : "خرید بازیکن"}</button></article>)}</div>}
+              {marketListings.length === 0 ? <p className="muted">در حال حاضر آگهی فعالی وجود ندارد.</p> : <div className="prospects">{marketListings.map((listing) => <article className="prospect" key={listing.id}><div><strong>{countryFlag(listing.player.nationality_code) && <span aria-label={`پرچم ${listing.player.nationality_code}`} title={listing.player.nationality_code}>{countryFlag(listing.player.nationality_code)} </span>}{listing.player.full_name}</strong><p>{listing.player.position} · قدرت {listing.player.overall} · پتانسیل {listing.player.potential}</p><small>باشگاه فروشنده: {listing.seller.name}</small><p>قیمت: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy || listing.seller.id === clubId} onClick={() => buyListing(listing.id)}>{listing.seller.id === clubId ? "آگهی شما" : "خرید بازیکن"}</button></article>)}</div>}
               {marketStatus && <p className="notice" role="status">{marketStatus}</p>}
             </section>
             <section className="academy" aria-labelledby="staff-heading">
@@ -830,7 +944,7 @@ export default function HomePage() {
               {academyStatus && <p className="notice" role="status">{academyStatus}</p>}
             </section>
           </div>
-        ) : (
+        ) : session ? (
           <form onSubmit={submit}>
             <label>
               نام باشگاه
@@ -853,9 +967,13 @@ export default function HomePage() {
                 onChange={(event) => setCountryCode(event.target.value)} placeholder="IR" />
             </label>
             <button type="submit" disabled={busy}>
-              {busy ? "در حال ثبت…" : "ورود با تلگرام و ساخت باشگاه"}
+              {busy ? "در حال ثبت…" : "ساخت باشگاه و شروع بازی"}
             </button>
           </form>
+        ) : (
+          <div className="muted">
+            {busy ? "در حال ورود امن به یازده…" : "برای شروع، مینی‌اپ را با دکمه ورود به باشگاه در گفت‌وگوی خصوصی ربات باز کن."}
+          </div>
         )}
         {status && <p className="notice" role="status">{status}</p>}
         {session && !clubId && <p className="muted">ورود انجام شده؛ ثبت باشگاه در حال تکمیل است.</p>}
@@ -864,9 +982,45 @@ export default function HomePage() {
       <style jsx>{`
         :global(*) { box-sizing: border-box; }
         :global(body) { margin: 0; background: #0b1220; color: #edf2f7; font-family: Tahoma, Arial, sans-serif; }
-        .page { min-height: 100vh; display: grid; place-items: center; padding: 24px 14px; }
-        .panel { width: min(100%, 520px); border: 1px solid #263449; border-radius: 24px; background: #121d2e; padding: 28px; box-shadow: 0 24px 70px #0005; }
-        header { margin-bottom: 24px; }
+        .page { min-height: 100vh; display: flex; justify-content: center; padding: 14px 10px 100px; background: radial-gradient(ellipse at 50% 0%, #173b6d 0%, #0b1220 52%); }
+        .panel { width: min(100%, 560px); border: 1px solid #263d5c; border-radius: 26px; background: linear-gradient(180deg, #12243b 0%, #101a2a 100%); padding: 16px; box-shadow: 0 24px 70px #0005; overflow: hidden; }
+        header { margin-bottom: 16px; padding: 12px 10px 16px; border-bottom: 1px solid #2b4261; }
+        .game-dashboard { margin: 12px 0 24px; }
+        .club-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid #36577e; border-radius:18px; background:linear-gradient(120deg,#173b6d,#17243c); }
+        .club-topline h2 { margin:6px 0 2px; font-size:20px; }
+        .club-topline p { margin:0; color:#b9cbe0; font-size:12px; }
+        .club-level { color:#ffcf5b; font-size:11px; font-weight:bold; }
+        .wallet { display:grid; gap:4px; text-align:center; padding:10px; border-radius:12px; background:#0b1728; color:#ffe08a; font-weight:bold; white-space:nowrap; }
+        .wallet small { color:#9fb2c8; font-size:10px; font-weight:normal; }
+        .stadium-hero { position:relative; display:flex; align-items:center; gap:14px; min-height:128px; margin:12px 0 20px; padding:18px; overflow:hidden; text-decoration:none; color:#fff; border:1px solid #4d9cf4; border-radius:20px; background:radial-gradient(ellipse at 78% 18%,#63c8ff88,transparent 35%),linear-gradient(115deg,#103b78,#087e9a 55%,#10375d); box-shadow:inset 0 1px 0 #ffffff40,0 12px 25px #0003; }
+        .stadium-lights { font-size:54px; filter:drop-shadow(0 0 16px #73caff); }
+        .stadium-copy { display:grid; gap:5px; }
+        .stadium-copy span,.stadium-copy small { color:#c5e7ff; font-size:11px; }
+        .stadium-copy strong { font-size:19px; }
+        .hero-arrow { margin-inline-start:auto; font-size:32px; }
+        .dashboard-heading { display:flex; align-items:baseline; justify-content:space-between; margin:0 2px 10px; }
+        .dashboard-heading h3 { margin:0; font-size:16px; }
+        .dashboard-heading span { color:#8fa9c6; font-size:11px; }
+        .game-tile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .game-tile { min-height:108px; display:grid; grid-template-columns:48px 1fr; grid-template-rows:auto auto; align-content:center; align-items:center; column-gap:10px; padding:14px; border:1px solid #ffffff26; border-radius:17px; color:#fff; text-decoration:none; box-shadow:inset 0 1px 0 #ffffff24,0 7px 16px #0002; transition:transform .15s ease,border-color .15s ease; }
+        .game-tile:active { transform:scale(.98); }
+        .tile-icon { grid-row:span 2; display:grid; place-items:center; width:46px; height:46px; border-radius:14px; background:#06172a55; font-size:27px; }
+        .game-tile strong { align-self:end; font-size:14px; }
+        .game-tile small { align-self:start; margin-top:4px; color:#e2edfa; font-size:10px; line-height:1.6; }
+        .tile-club { background:linear-gradient(135deg,#0759b9,#143b72); }
+        .tile-stadium { background:linear-gradient(135deg,#087d50,#124d42); }
+        .tile-market { background:linear-gradient(135deg,#7134b7,#38256f); }
+        .tile-missions { background:linear-gradient(135deg,#c17a0b,#75421b); }
+        .tile-competition { background:linear-gradient(135deg,#247c38,#15502f); }
+        .tile-shop { background:linear-gradient(135deg,#ad267f,#60235f); }
+        .tile-academy { background:linear-gradient(135deg,#087f9c,#164c82); }
+        .tile-community { background:linear-gradient(135deg,#355a9c,#273d6e); }
+        .game-bottom-nav { position:fixed; z-index:20; bottom: max(8px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:min(calc(100% - 20px),540px); display:grid; grid-template-columns:repeat(5,1fr); gap:2px; padding:8px 6px; border:1px solid #4a6283; border-radius:20px; background:#0b1728f2; box-shadow:0 10px 35px #0009; backdrop-filter:blur(14px); }
+        .game-bottom-nav a { display:grid; justify-items:center; gap:3px; color:#b9cce3; text-decoration:none; font-size:10px; }
+        .game-bottom-nav a span { font-size:20px; line-height:1.2; }
+        @media (min-width:700px) { .page { padding-top:28px; } .panel { padding:24px; } .game-tile-grid { gap:14px; } .game-tile { min-height:125px; } }
+        header .eyebrow { letter-spacing:.02em; }
+        h1 { font-size:30px; margin:0; }
         .eyebrow { color: #82b7ff; font-size: 13px; margin: 0 0 8px; }
         h1 { font-size: 36px; margin: 0; }
         .subtitle, .muted, footer { color: #a6b5c9; line-height: 1.8; }

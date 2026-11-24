@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "football-empire-web-staging",
+  "main": "cloudflare-worker.mjs",
+  "compatibility_date": "2026-11-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "APP_ENV": "staging",
+    "NEXT_PUBLIC_API_URL": "https://football-empire-api-staging.mshmahyar9.workers.dev"
+  },
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": {
+    "enabled": true
+  }
+}
