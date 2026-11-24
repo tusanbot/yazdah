@@ -48,7 +48,7 @@ type ClubProfile = {
   tactics: { formation: string; mentality: string; tempo: string; pressing: string };
 };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\\/+$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
 export default function HomePage() {
   const [clubName, setClubName] = useState("");
