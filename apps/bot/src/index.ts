@@ -280,6 +280,38 @@ bot.command("market", async (ctx) => {
     reply_markup: await appEntryKeyboard(ctx.chat.type, "بازار نقل‌وانتقالات", "market-heading"),
   });
 });
+for (const [command, label, section] of [
+  ["squad", "ترکیب و بازیکنان", "squad-heading"],
+  ["matches", "مسابقات باشگاه", "matches-heading"],
+  ["academy", "آکادمی", "academy-heading"],
+  ["staff", "کادر فنی", "staff-heading"],
+  ["tactics", "تاکتیک مسابقه", "tactics-heading"],
+] as const) {
+  bot.command(command, async (ctx) => {
+    await ctx.reply(`برای مشاهدهٔ ${label}، مینی‌اپ یازده را باز کن.`, {
+      reply_markup: await appEntryKeyboard(ctx.chat.type, label, section),
+    });
+  });
+}
+
+async function getServiceStatus() {
+  if (!apiUrl) return "ربات فعال است؛ آدرس API در تنظیمات ربات ثبت نشده است.";
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/health`);
+    const body = await response.json() as { status?: string; databaseConfigured?: boolean };
+    if (!response.ok || body.status !== "ok") return "ربات فعال است، اما API پاسخ سالم نمی‌دهد.";
+    return body.databaseConfigured
+      ? "ربات و API فعال‌اند؛ اتصال پایگاه داده برقرار است."
+      : "ربات و API فعال‌اند، اما پایگاه داده در API پیکربندی نشده است.";
+  } catch {
+    return "ربات فعال است، اما ارتباط با API برقرار نشد.";
+  }
+}
+
+bot.command("status", async (ctx) => {
+  await ctx.reply(await getServiceStatus());
+});
+
 
 bot.command("help", async (ctx) => {
   await ctx.reply(
@@ -287,6 +319,12 @@ bot.command("help", async (ctx) => {
 /start — شروع و ورود به باشگاه
 /menu — نمایش منوی اصلی
 /market — بازار نقل‌وانتقالات
+/squad — ترکیب و بازیکنان
+/matches — مسابقات باشگاه
+/academy — آکادمی
+/staff — کادر فنی
+/tactics — تاکتیک مسابقه
+/status — وضعیت واقعی API و پایگاه داده
 /game — ساخت چالش گروهی (فقط مدیران گروه)
 /games — مشاهده چالش‌ها و مأموریت‌های گروه
 /league — مدیریت لیگ محلی گروه
@@ -308,7 +346,8 @@ bot.callbackQuery("help", async (ctx) => {
 });
 
 bot.callbackQuery("status", async (ctx) => {
-  await ctx.answerCallbackQuery({ text: "ربات فعال است." });
+  await ctx.answerCallbackQuery({ text: "در حال بررسی سرویس…" });
+  await ctx.reply(await getServiceStatus());
 });
 
 
