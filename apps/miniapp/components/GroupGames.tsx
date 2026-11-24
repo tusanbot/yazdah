@@ -66,7 +66,7 @@ type GameDetail = {
   currentUserId: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 const gameLabels: Record<GroupGame["game_type"], string> = {
   draft: "درفت اسطوره‌ها",
   penalty: "چالش پنالتی",
@@ -109,22 +109,43 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
     if (!selectedChatId || !accessToken || !API_URL) return;
     setBusy(true);
     setStatus("");
+    const failures: string[] = [];
     try {
-      const [gamesResponse, missionsResponse, walletResponse] = await Promise.all([
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/games`, { headers }),
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/missions`, { headers }),
-        fetch(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/wallet`, { headers }),
+      const requestJson = async (url: string) => {
+        const response = await fetch(url, { headers });
+        return { ok: response.ok, body: await response.json() };
+      };
+      const [gamesResult, missionsResult, walletResult] = await Promise.allSettled([
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/games`),
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/missions`),
+        requestJson(`${API_URL}/groups/${encodeURIComponent(selectedChatId)}/wallet`),
       ]);
-      const gamesBody = await gamesResponse.json();
-      const missionsBody = await missionsResponse.json();
-      const walletBody = await walletResponse.json();
-      if (!gamesResponse.ok) throw new Error(gamesBody.error ?? "بارگذاری چالش‌های گروه ناموفق بود.");
-      if (!missionsResponse.ok) throw new Error(missionsBody.error ?? "بارگذاری مأموریت‌های گروه ناموفق بود.");
-      if (!walletResponse.ok) throw new Error(walletBody.error ?? "بارگذاری کیف پول گروه ناموفق بود.");
-      setGames(gamesBody.games ?? []);
-      setWalletBalance(Number(walletBody.balance ?? gamesBody.walletBalance ?? missionsBody.walletBalance ?? 0));
-      setWalletTransactions(walletBody.transactions ?? []);
-      setMissions(missionsBody.missions ?? []);
+
+      let gamesBody: { games?: GroupGame[]; walletBalance?: number } = {};
+      if (gamesResult.status === "fulfilled" && gamesResult.value.ok) {
+        gamesBody = gamesResult.value.body;
+        setGames(gamesBody.games ?? []);
+      } else {
+        failures.push("چالش‌ها");
+      }
+
+      if (missionsResult.status === "fulfilled" && missionsResult.value.ok) {
+        setMissions(missionsResult.value.body.missions ?? []);
+      } else {
+        failures.push("مأموریت‌ها");
+      }
+
+      if (walletResult.status === "fulfilled" && walletResult.value.ok) {
+        setWalletBalance(Number(walletResult.value.body.balance ?? gamesBody.walletBalance ?? 0));
+        setWalletTransactions(walletResult.value.body.transactions ?? []);
+      } else {
+        failures.push("کیف پول");
+        if (typeof gamesBody.walletBalance === "number") setWalletBalance(gamesBody.walletBalance);
+      }
+
+      setStatus(failures.length
+        ? `بارگذاری این بخش‌ها ناموفق بود: ${failures.join("، ")}. سایر بخش‌های بارگذاری‌شده در دسترس‌اند.`
+        : "");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "ارتباط با گروه برقرار نشد.");
     } finally {
