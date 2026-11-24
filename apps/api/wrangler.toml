@@ -1,7 +1,9 @@
 name = "football-empire-api-staging"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-11-23"
-compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup"]
+# Fastify's readiness promise is shared by the Worker module; allow it to
+# settle even when the request that first created it has already completed.
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup", "handle_cross_request_promise_resolution"]
 preview_urls = false
 
 [vars]
