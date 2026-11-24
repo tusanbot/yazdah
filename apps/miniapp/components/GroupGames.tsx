@@ -65,6 +65,7 @@ type LocalLeagueOverview = {
   standings: LocalLeagueStanding[];
   isAdmin: boolean;
   currentUserId: string;
+  groupLinked: boolean;
 };
 type WalletTransaction = { id: string; amount: number; balance_after: number; reason: string; created_at: string };
 type GameDetail = {
@@ -507,7 +508,7 @@ export default function GroupGames({ accessToken }: { accessToken: string }) {
           <section className="local-league">
             <h3>لیگ محلی گروه</h3>
             <p>لیگ اختیاری گروه؛ مدیر گروه ثبت‌نام را فعال می‌کند، اعضا با باشگاه خود وارد می‌شوند و مدیر پس از ثبت‌نام حداقل دو باشگاه لیگ را آغاز می‌کند.</p>
-            {!localLeague ? <p className="muted">وضعیت لیگ محلی بارگذاری نشده است.</p> : (
+            {!localLeague ? <p className="muted">وضعیت لیگ محلی بارگذاری نشده است.</p> : !localLeague.groupLinked ? <p className="muted">ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.</p> : (
               <>
                 <p className="league-status">{!localLeague.league ? "لیگ هنوز فعال نشده" : localLeague.league.competition_id ? "لیگ آغاز شده" : localLeague.league.enabled ? "ثبت‌نام فعال است" : "ثبت‌نام غیرفعال است"} · {localLeague.entries.length} باشگاه ثبت‌نام کرده‌اند</p>
                 {!localLeague.league && localLeague.isAdmin && <button type="button" disabled={busy} onClick={() => void localLeagueAction("activate")}>فعال‌سازی لیگ محلی</button>}
