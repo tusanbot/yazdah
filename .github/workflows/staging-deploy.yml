@@ -1,9 +1,9 @@
 name: Deploy Cloudflare staging
-# Staging-only deployment; this comment change retriggers deployment after secrets are configured.
 
 on:
   push:
     branches:
+      - main
       - cloudflare/staging-workers
   workflow_dispatch:
 
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -32,7 +32,13 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-      - name: Validate workspace build
+      - name: Run tests
+        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Build workspace
         run: pnpm build
       - name: Build Mini App for Cloudflare Workers
         run: pnpm --dir apps/miniapp exec opennextjs-cloudflare build
@@ -44,14 +50,15 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Build passed. Deployment skipped because CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID is not configured as a GitHub Actions secret."
+            echo "::error::Deployment blocked: configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub Actions secrets."
+            exit 1
           fi
       - name: Deploy API staging Worker
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --dir apps/miniapp exec wrangler deploy --config ../api/wrangler.toml
       - name: Deploy Telegram bot staging Worker
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --dir apps/miniapp exec wrangler deploy --config ../bot/wrangler.toml
-      - name: Deploy Mini App and scheduled game processing staging Worker
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.ready == 'true'
+      - name: Deploy Mini App staging Worker
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm --dir apps/miniapp exec opennextjs-cloudflare deploy --config wrangler.jsonc
