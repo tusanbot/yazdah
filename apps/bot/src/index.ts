@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, type Context } from "grammy";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL;
@@ -14,6 +14,21 @@ if (!miniAppUrl) {
 const requiredMiniAppUrl: string = miniAppUrl;
 
 const bot = new Bot(token);
+
+async function replyRich(
+  ctx: Context,
+  html: string,
+  plainText: string,
+  replyMarkup?: InlineKeyboard,
+) {
+  const options = replyMarkup ? { reply_markup: replyMarkup } : {};
+  try {
+    await ctx.reply(html, { ...options, parse_mode: "HTML" });
+  } catch (error) {
+    console.warn("Rich Telegram message failed; retrying as plain text", error);
+    await ctx.reply(plainText, options);
+  }
+}
 
 function appSectionUrl(section?: string) {
   const url = new URL(requiredMiniAppUrl);
@@ -176,12 +191,67 @@ bot.command("challenge", async (ctx) => {
       await ctx.reply(messages[body.error ?? ""] ?? "عملیات چالش انجام نشد؛ شناسه‌ها و زمان را بررسی کن.");
       return;
     }
-    await ctx.reply(action === "create"
-      ? "چالش ثبت شد. مدیر باشگاه حریف می‌تواند آن را از بخش رقابت‌های گروه در مینی‌اپ بررسی و بپذیرد."
-      : "چالش پذیرفته شد و مسابقه ساخته شد.");
+    if (action === "create" && body.challengeId) {
+      const acceptKeyboard = new InlineKeyboard().text("🤝 پذیرش چالش", `challenge_accept:${body.challengeId}`);
+      await replyRich(
+        ctx,
+        "<b>⚽ چالش ثبت شد</b>\nمدیر باشگاه حریف می‌تواند با دکمهٔ زیر آن را بررسی و بپذیرد.",
+        "چالش ثبت شد. مدیر باشگاه حریف می‌تواند آن را با دکمهٔ پذیرش بررسی کند.",
+        acceptKeyboard,
+      );
+    } else {
+      await replyRich(ctx, "<b>✅ چالش پذیرفته شد</b>\nمسابقه ساخته شد.", "چالش پذیرفته شد و مسابقه ساخته شد.");
+    }
   } catch (error) {
     console.error("Telegram group challenge failed", error);
     await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+  }
+});
+
+bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
+  const challengeId = ctx.match[1];
+  const actor = ctx.callbackQuery.from;
+  const message = ctx.callbackQuery.message;
+  if (!message || (message.chat.type !== "group" && message.chat.type !== "supergroup")) {
+    await ctx.answerCallbackQuery({ text: "این دکمه فقط در گروه مربوطه قابل استفاده است.", show_alert: true });
+    return;
+  }
+  const isAdmin = await bot.api.getChatMember(message.chat.id, actor.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false);
+  if (!isAdmin) {
+    await ctx.answerCallbackQuery({ text: "فقط مدیران گروه می‌توانند چالش را بپذیرند.", show_alert: true });
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.answerCallbackQuery({ text: "سرویس چالش‌ها در دسترس نیست.", show_alert: true });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: "در حال ثبت پذیرش…" });
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({
+        action: "accept", challengeId, telegramUserId: actor.id, telegramChatId: message.chat.id,
+      }),
+    });
+    const body = await response.json() as { error?: string; matchId?: string };
+    if (!response.ok) {
+      const errors: Record<string, string> = {
+        challenge_not_found: "چالش در این گروه پیدا نشد.",
+        challenge_not_available: "این چالش قبلاً پذیرفته شده یا دیگر در دسترس نیست.",
+        challenge_opponent_club_required: "این چالش برای باشگاه شما ثبت نشده است.",
+        telegram_group_not_linked: "این گروه به یازده متصل نیست.",
+        telegram_user_not_registered: "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز.",
+      };
+      await ctx.api.sendMessage(message.chat.id, errors[body.error ?? ""] ?? "پذیرش چالش انجام نشد؛ کمی بعد دوباره تلاش کن.");
+      return;
+    }
+    await ctx.api.sendMessage(message.chat.id, "✅ چالش پذیرفته شد و مسابقه ساخته شد.");
+  } catch (error) {
+    console.error("Telegram challenge acceptance failed", error);
+    await ctx.api.sendMessage(message.chat.id, "ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
   }
 });
 
