@@ -141,6 +141,7 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (!Number.isSafeInteger(telegramUserId) || !Number.isSafeInteger(telegramChatId) ||
       !gameTypes.includes(gameType ?? "") || !Number.isSafeInteger(entryFee) || entryFee < 0 ||
       !Number.isSafeInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 30 ||
+      (["draft", "penalty", "cards"].includes(gameType ?? "") && maxParticipants !== 2) ||
       (title !== undefined && (typeof title !== "string" || title.trim().length > 80))) {
       return reply.code(400).send({ error: "group_game_input_invalid" });
     }
