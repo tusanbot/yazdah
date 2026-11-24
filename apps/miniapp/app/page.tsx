@@ -24,7 +24,7 @@ type MarketListing = { id: string; asking_price: number; listed_at: string; play
 type OwnListing = { id: string; player_id: string; asking_price: number; status: string };
 type Standing = { club_id: string; points: number; played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; club: { name: string; slug: string } | null };
 type ClubMatch = { id: string; competition_id: string | null; home_club_id: string; away_club_id: string; kickoff_at: string; status: string; home_score: number | null; away_score: number | null; competition: { name: string; competition_type: string; season: number } | null };
-type SquadPlayer = { id: string; full_name: string; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; player_class: "ordinary" | "professional" | "special"; ordinary_tier: "base" | "prospect" | "elite" | null; release_clause: number; acquisition_source: string; squad_slot: { slot_no: number }[] | null };
+type SquadPlayer = { id: string; full_name: string; nationality_code: string | null; position: string; overall: number; potential: number; fitness: number; morale: number; contract_until: string | null; weekly_wage: number; player_class: "ordinary" | "professional" | "special"; ordinary_tier: "base" | "prospect" | "elite" | null; release_clause: number; acquisition_source: string; squad_slot: { slot_no: number }[] | null };
 type StaffMember = { id: string; full_name: string; staff_role: string; staff_tier: "ordinary" | "professional" | "legendary"; specialty: string | null; skill: number; weekly_wage: number; signing_fee: number; generated_source: string; effect_profile: Record<string, number>; contract_until: string | null; released_at: string | null };
 type AcademyProspect = { id: string; full_name: string; birth_date: string; position: string; potential: number; development: number; status: "training" | "promoted" | "released"; created_at: string };
 type ClubMission = { id: string; title: string; description: string; target_count: number; reward_coins: number; progress: number; claimedAt: string | null };
@@ -47,6 +47,11 @@ type ClubProfile = {
   economy: { balance: number };
   tactics: { formation: string; mentality: string; tempo: string; pressing: string };
 };
+
+function countryFlag(code?: string | null): string {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
+  return String.fromCodePoint(...code.toUpperCase().split("").map((char) => 127397 + char.charCodeAt(0)));
+}
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
@@ -710,7 +715,7 @@ export default function HomePage() {
             <h2>باشگاه ثبت شد</h2>
             <p>شناسه باشگاه: <code>{clubId}</code></p>
             {clubProfile && <>
-              <p>نام باشگاه: {clubProfile.name}</p>
+              <p>نام باشگاه: {countryFlag(clubProfile.country_code) && <span aria-label={`پرچم ${clubProfile.country_code}`} title={clubProfile.country_code}>{countryFlag(clubProfile.country_code)} </span>}{clubProfile.name}</p>
               <p>سطح: {clubProfile.level} · اعتبار: {clubProfile.reputation}</p>
               <p>موجودی: {clubProfile.economy.balance.toLocaleString("fa-IR")} سکه</p>
               <p>آرایش اولیه: {clubProfile.tactics.formation}</p>
@@ -821,7 +826,7 @@ export default function HomePage() {
               </div>
               {players.length === 0 ? <p className="muted">هنوز بازیکنی در تیم اصلی ثبت نشده است. از آکادمی بازیکن جذب و ارتقا بده.</p> : <div className="prospects">
                 {players.map((player) => <article className="prospect" key={player.id}>
-                  <div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential} · {player.player_class === "special" ? "ویژه" : player.player_class === "professional" ? "حرفه‌ای" : ({base:"پایه",prospect:"مستعد",elite:"نخبه"} as Record<string,string>)[player.ordinary_tier ?? "base"]}</p><small>رضایت‌نامه {Number(player.release_clause).toLocaleString("fa-IR")} سکه · آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"} · قرارداد تا {player.contract_until ?? "نامشخص"} · دستمزد هفتگی {Number(player.weekly_wage).toLocaleString("fa-IR")}</small>
+                  <div><strong>{countryFlag(player.nationality_code) && <span aria-label={`پرچم ${player.nationality_code}`} title={player.nationality_code}>{countryFlag(player.nationality_code)} </span>}{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential} · {player.player_class === "special" ? "ویژه" : player.player_class === "professional" ? "حرفه‌ای" : ({base:"پایه",prospect:"مستعد",elite:"نخبه"} as Record<string,string>)[player.ordinary_tier ?? "base"]}</p><small>رضایت‌نامه {Number(player.release_clause).toLocaleString("fa-IR")} سکه · آمادگی {player.fitness} · روحیه {player.morale} · {player.squad_slot?.[0] ? `ترکیب اصلی، جایگاه ${player.squad_slot[0].slot_no}` : "ذخیره"} · قرارداد تا {player.contract_until ?? "نامشخص"} · دستمزد هفتگی {Number(player.weekly_wage).toLocaleString("fa-IR")}</small>
                     <form className="contract-form" onSubmit={(event) => renewPlayerContract(event, player.id)}>
                       <label>تمدید تا<input required name="contractUntil" type="date" defaultValue={player.contract_until ?? ""} /></label>
                       <label>حقوق هفتگی<input required name="weeklyWage" type="number" min={0} max={100000000} defaultValue={player.weekly_wage} /></label>
@@ -866,11 +871,11 @@ export default function HomePage() {
               <h2 id="market-heading">بازار نقل‌وانتقالات</h2>
               <p className="muted">بازیکن بفروش یا با موجودی باشگاه بازیکن بخَر. خریدوفروش و تسویهٔ مالی در یک تراکنش انجام می‌شود.</p>
               <h3>آگهی‌های باشگاه</h3>
-              {ownListings.length === 0 ? <p className="muted">آگهی فعالی ندارید.</p> : <div className="prospects">{ownListings.map((listing) => { const player = players.find((item) => item.id === listing.player_id); return <article className="prospect" key={listing.id}><div><strong>{player?.full_name ?? "بازیکن"}</strong><p>قیمت درخواستی: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy} onClick={() => withdrawListing(listing.id)}>برداشتن آگهی</button></article>; })}</div>}
+              {ownListings.length === 0 ? <p className="muted">آگهی فعالی ندارید.</p> : <div className="prospects">{ownListings.map((listing) => { const player = players.find((item) => item.id === listing.player_id); return <article className="prospect" key={listing.id}><div><strong>{player && countryFlag(player.nationality_code) && <span aria-label={`پرچم ${player.nationality_code}`} title={player.nationality_code}>{countryFlag(player.nationality_code)} </span>}{player?.full_name ?? "بازیکن"}</strong><p>قیمت درخواستی: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy} onClick={() => withdrawListing(listing.id)}>برداشتن آگهی</button></article>; })}</div>}
               <h3>بازیکنان قابل فروش</h3>
               {players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).length === 0 ? <p className="muted">بازیکن قابل فروش دیگری ندارید.</p> : <div className="prospects">{players.filter((player) => !ownListings.some((listing) => listing.player_id === player.id)).map((player) => <article className="prospect" key={player.id}><div><strong>{player.full_name}</strong><p>{player.position} · قدرت {player.overall} · پتانسیل {player.potential}</p></div><label>قیمت فروش<input type="number" min={1} step={1} value={marketPrices[player.id] ?? ""} onChange={(event) => setMarketPrices((prices) => ({ ...prices, [player.id]: event.target.value }))} /></label><button type="button" disabled={marketBusy} onClick={() => listPlayer(player.id)}>ثبت آگهی</button></article>)}</div>}
               <h3>آگهی‌های بازار</h3>
-              {marketListings.length === 0 ? <p className="muted">در حال حاضر آگهی فعالی وجود ندارد.</p> : <div className="prospects">{marketListings.map((listing) => <article className="prospect" key={listing.id}><div><strong>{listing.player.full_name}</strong><p>{listing.player.position} · قدرت {listing.player.overall} · پتانسیل {listing.player.potential}</p><small>باشگاه فروشنده: {listing.seller.name}</small><p>قیمت: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy || listing.seller.id === clubId} onClick={() => buyListing(listing.id)}>{listing.seller.id === clubId ? "آگهی شما" : "خرید بازیکن"}</button></article>)}</div>}
+              {marketListings.length === 0 ? <p className="muted">در حال حاضر آگهی فعالی وجود ندارد.</p> : <div className="prospects">{marketListings.map((listing) => <article className="prospect" key={listing.id}><div><strong>{countryFlag(listing.player.nationality_code) && <span aria-label={`پرچم ${listing.player.nationality_code}`} title={listing.player.nationality_code}>{countryFlag(listing.player.nationality_code)} </span>}{listing.player.full_name}</strong><p>{listing.player.position} · قدرت {listing.player.overall} · پتانسیل {listing.player.potential}</p><small>باشگاه فروشنده: {listing.seller.name}</small><p>قیمت: {Number(listing.asking_price).toLocaleString("fa-IR")} سکه</p></div><button type="button" disabled={marketBusy || listing.seller.id === clubId} onClick={() => buyListing(listing.id)}>{listing.seller.id === clubId ? "آگهی شما" : "خرید بازیکن"}</button></article>)}</div>}
               {marketStatus && <p className="notice" role="status">{marketStatus}</p>}
             </section>
             <section className="academy" aria-labelledby="staff-heading">
