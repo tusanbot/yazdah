@@ -10,8 +10,16 @@ ENVIRONMENT = "staging"
 NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.workers.dev"
 
+# Keep the migration ledger aligned with the deployed Worker. The remote Worker
+# is already at v1 and owns the MatchCoordinator namespace. Declare that
+# original creation before deleting the class in v2; a deletion-only migration
+# is invalid because Wrangler otherwise has no local history for the class.
 [[migrations]]
-tag = "v3"
+tag = "v1"
+new_classes = ["MatchCoordinator"]
+
+[[migrations]]
+tag = "v2"
 deleted_classes = ["MatchCoordinator"]
 
 [triggers]
