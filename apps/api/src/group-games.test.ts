@@ -6,14 +6,14 @@ import { registerGroupGameRoutes } from "./group-games.js";
 const apps: ReturnType<typeof Fastify>[] = [];
 
 async function makeApp(options: {
-  supabase?: null;
+  supabase?: null | "mock";
   secret?: string;
   readSession?: (header?: string) => string | null;
 } = {}) {
   const app = Fastify();
   apps.push(app);
   registerGroupGameRoutes(app, {
-    supabase: options.supabase ?? null,
+    supabase: options.supabase === "mock" ? {} as never : null,
     readSession: options.readSession ?? (() => null),
     botInternalSecret: options.secret,
   });
@@ -54,7 +54,7 @@ test("internal game creation fails closed when the shared secret is not configur
 });
 
 test("internal game creation rejects missing or incorrect bot credentials", async () => {
-  const app = await makeApp({ secret: "configured-secret" });
+  const app = await makeApp({ supabase: "mock", secret: "configured-secret" });
   const missing = await app.inject({
     method: "POST",
     url: "/internal/telegram-groups/games",
@@ -75,7 +75,7 @@ test("internal game creation rejects missing or incorrect bot credentials", asyn
 
 test("group game routes reject missing user sessions", async () => {
   const app = await makeApp({
-    supabase: {} as never,
+    supabase: "mock",
     readSession: () => null,
   });
   const response = await app.inject({

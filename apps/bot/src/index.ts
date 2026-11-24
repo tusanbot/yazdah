@@ -87,9 +87,10 @@ function mainMenu() {
 bot.command("start", async (ctx) => {
   const payload = ctx.match.trim();
   const appLink = payload.match(/^app_([a-z-]+)$/i);
-  if (appLink && appSections.has(appLink[1])) {
+  const appSection = appLink?.[1];
+  if (appSection && appSections.has(appSection)) {
     await ctx.reply("برای ادامه، مینی‌اپ یازده را باز کن.", {
-      reply_markup: await appEntryKeyboard("private", "باز کردن یازده", appLink[1]),
+      reply_markup: await appEntryKeyboard("private", "باز کردن یازده", appSection),
     });
     return;
   }
@@ -229,7 +230,7 @@ bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   }
   await ctx.answerCallbackQuery({ text: "در حال ثبت پذیرش…" });
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/challenge`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
