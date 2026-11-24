@@ -32,7 +32,7 @@ begin
     where telegram_chat_id=p_chat_id;
   return jsonb_build_object('enabled',true,'competitionId',null);
 end;
-$;
+$$;
 
 create or replace function public.join_group_local_league(p_chat_id bigint,p_user_id uuid,p_club_id uuid)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
@@ -54,7 +54,7 @@ begin
     values(p_chat_id,p_user_id,p_club_id);
   return jsonb_build_object('joined',true,'userId',p_user_id,'clubId',p_club_id);
 end;
-$;
+$$;
 
 create or replace function public.start_group_local_league(p_chat_id bigint)
 returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
