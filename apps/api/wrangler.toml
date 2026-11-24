@@ -10,6 +10,10 @@ ENVIRONMENT = "staging"
 NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.workers.dev"
 
+[[migrations]]
+tag = "v3"
+deleted_classes = ["MatchCoordinator"]
+
 [triggers]
 crons = ["*/15 * * * *"]
 
