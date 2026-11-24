@@ -131,21 +131,25 @@ export default function HomePage() {
     return body as AuthResult;
   }
 
-  async function loadClubWorkspace(accessToken: string, club: ClubProfile) {
+  async function loadClubWorkspace(accessToken: string, club: ClubProfile): Promise<string[]> {
     setClubId(club.id);
     setClubProfile(club);
     setTactics(club.tactics);
-    await Promise.all([
-      loadPlayers(accessToken),
-      loadTrainingPlan(accessToken),
-      loadMatches(accessToken),
-      loadMarket(accessToken),
-      loadOwnListings(accessToken),
-      loadAcademy(accessToken),
-      loadStaff(accessToken),
-      loadCommunity(accessToken),
-      loadAdminOverview(accessToken),
-    ]);
+
+    const sections = [
+      ["ترکیب و بازیکنان", () => loadPlayers(accessToken)],
+      ["تمرین", () => loadTrainingPlan(accessToken)],
+      ["مسابقات", () => loadMatches(accessToken)],
+      ["بازار نقل‌وانتقالات", () => loadMarket(accessToken)],
+      ["آگهی‌های باشگاه", () => loadOwnListings(accessToken)],
+      ["آکادمی", () => loadAcademy(accessToken)],
+      ["کادر فنی", () => loadStaff(accessToken)],
+      ["جامعه و بازی‌های گروهی", () => loadCommunity(accessToken)],
+      ["پنل مدیریت", () => loadAdminOverview(accessToken)],
+    ] as const;
+
+    const results = await Promise.allSettled(sections.map(([, load]) => load()));
+    return results.flatMap((result, index) => result.status === "rejected" ? [sections[index][0]] : []);
   }
 
   useEffect(() => {
@@ -165,8 +169,10 @@ export default function HomePage() {
         if (!response.ok) throw new Error(body.error ?? "بررسی باشگاه کاربر ناموفق بود.");
 
         if (body.club) {
-          await loadClubWorkspace(auth.accessToken, body.club as ClubProfile);
-          if (active) setStatus("خوش آمدی! اطلاعات باشگاهت بارگذاری شد.");
+          const failedSections = await loadClubWorkspace(auth.accessToken, body.club as ClubProfile);
+          if (active) setStatus(failedSections.length
+            ? `وارد باشگاه شدی؛ بارگذاری این بخش‌ها ناموفق بود: ${failedSections.join("، ")}. می‌توانی بخش‌های دیگر را استفاده کنی و بعد دوباره تلاش کنی.`
+            : "خوش آمدی! اطلاعات باشگاهت بارگذاری شد.");
         } else if (active) {
           setStatus("ورود امن انجام شد؛ برای شروع، باشگاهت را ثبت کن.");
         }
@@ -207,8 +213,10 @@ export default function HomePage() {
       const existingBody = await existingResponse.json();
       if (!existingResponse.ok) throw new Error(existingBody.error ?? "بررسی باشگاه کاربر ناموفق بود.");
       if (existingBody.club) {
-        await loadClubWorkspace(auth.accessToken, existingBody.club as ClubProfile);
-        setStatus("باشگاه قبلی شما بارگذاری شد.");
+        const failedSections = await loadClubWorkspace(auth.accessToken, existingBody.club as ClubProfile);
+        setStatus(failedSections.length
+          ? `باشگاه قبلی بارگذاری شد؛ بعضی بخش‌ها در دسترس نیستند: ${failedSections.join("، ")}.`
+          : "باشگاه قبلی شما بارگذاری شد.");
         return;
       }
 
@@ -235,8 +243,10 @@ export default function HomePage() {
       if (!profileResponse.ok || !profileBody.club) {
         throw new Error(profileBody.error ?? "بارگذاری پروفایل باشگاه ناموفق بود.");
       }
-      await loadClubWorkspace(auth.accessToken, profileBody.club as ClubProfile);
-      setStatus("باشگاه با موفقیت ساخته شد.");
+      const failedSections = await loadClubWorkspace(auth.accessToken, profileBody.club as ClubProfile);
+      setStatus(failedSections.length
+        ? `باشگاه ساخته شد؛ بارگذاری این بخش‌ها ناموفق بود: ${failedSections.join("، ")}.`
+        : "باشگاه با موفقیت ساخته شد.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "خطای نامشخص رخ داد.");
     } finally {
