@@ -306,7 +306,7 @@ bot.command("game", async (ctx) => {
     if (!response.ok) {
       const messages: Record<string, string> = {
         telegram_group_admin_required: "تأیید مدیر بودن در تلگرام انجام نشد.",
-        telegram_group_not_linked: "ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.",
+        telegram_group_not_linked: "ابتدا مدیر گروه باید گروه را از بخش بازی‌های گروه در مینی‌اپ به یازده متصل کند.",
         telegram_user_not_registered: "ابتدا از طریق مینی‌اپ وارد یازده شو و باشگاهت را بساز.",
         club_required_before_group_game: "برای ساخت چالش باید باشگاه داشته باشی.",
       };
@@ -379,8 +379,9 @@ async function getServiceStatus() {
 }
 
 bot.command("status", async (ctx) => {
-  await ctx.reply(`🩺 <b>وضعیت سرویس</b>
-${await getServiceStatus()}`, { parse_mode: "HTML" });
+  await replyRich(ctx, `🩺 <b>وضعیت سرویس</b>
+${await getServiceStatus()}`, `وضعیت سرویس
+${await getServiceStatus()}`);
 });
 
 
@@ -404,7 +405,9 @@ bot.callbackQuery("help", async (ctx) => {
 
 bot.callbackQuery("status", async (ctx) => {
   await ctx.answerCallbackQuery({ text: "در حال بررسی سرویس…" });
-  await ctx.reply(await getServiceStatus());
+  await replyRich(ctx, `🩺 <b>وضعیت سرویس</b>
+${await getServiceStatus()}`, `وضعیت سرویس
+${await getServiceStatus()}`);
 });
 
 
@@ -449,7 +452,7 @@ bot.command("group", async (ctx) => {
       const message = body.error === "telegram_group_already_linked"
         ? "این گروه قبلاً به حساب دیگری متصل شده است؛ برای جلوگیری از تغییر مالکیت، اتصال مجدد مجاز نیست."
         : body.error === "telegram_user_not_registered"
-        ? "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز، سپس دوباره /group را اجرا کن."
+        ? "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز، سپس اتصال گروه را دوباره انجام بده."
         : body.error === "club_required_before_group_link"
           ? "برای اتصال گروه، ابتدا باید باشگاهت را در مینی‌اپ ایجاد کنی."
           : "ثبت اتصال گروه انجام نشد؛ کمی بعد دوباره تلاش کن.";
