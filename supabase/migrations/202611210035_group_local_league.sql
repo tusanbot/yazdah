@@ -17,6 +17,23 @@ create table if not exists public.group_local_league_entries (
   unique (telegram_chat_id,club_id)
 );
 
+create or replace function public.activate_group_local_league(p_chat_id bigint,p_actor_user_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
+declare v_league public.group_local_leagues%rowtype;
+begin
+  insert into public.group_local_leagues(telegram_chat_id,enabled,activated_by_user_id,activated_at)
+    values(p_chat_id,true,p_actor_user_id,now()) on conflict(telegram_chat_id) do nothing;
+  select * into v_league from public.group_local_leagues
+    where telegram_chat_id=p_chat_id for update;
+  if v_league.competition_id is not null then
+    raise exception 'local_league_already_started' using errcode='23505';
+  end if;
+  update public.group_local_leagues set enabled=true,activated_by_user_id=p_actor_user_id,activated_at=now()
+    where telegram_chat_id=p_chat_id;
+  return jsonb_build_object('enabled',true,'competitionId',null);
+end;
+$;
+
 create or replace function public.join_group_local_league(p_chat_id bigint,p_user_id uuid,p_club_id uuid)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
 declare v_league public.group_local_leagues%rowtype; v_count integer;
@@ -82,6 +99,8 @@ alter table public.group_local_leagues enable row level security;
 alter table public.group_local_league_entries enable row level security;
 revoke all on public.group_local_leagues from public,anon,authenticated;
 revoke all on public.group_local_league_entries from public,anon,authenticated;
+revoke all on function public.activate_group_local_league(bigint,uuid) from public,anon,authenticated;
+grant execute on function public.activate_group_local_league(bigint,uuid) to service_role;
 revoke all on function public.join_group_local_league(bigint,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.join_group_local_league(bigint,uuid,uuid) to service_role;
 revoke all on function public.start_group_local_league(bigint) from public,anon,authenticated;
