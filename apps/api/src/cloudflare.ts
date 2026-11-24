@@ -27,9 +27,8 @@ export default {
 // Cloudflare instances still reference its namespace. The current API no
 // longer routes work through this class; retain a safe, explicit tombstone.
 export class MatchCoordinator {
-  constructor(_state: unknown, _env: unknown) {}
-
-  async fetch(_request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
+    void request;
     return new Response("MatchCoordinator is retired.", { status: 410 });
   }
 }
