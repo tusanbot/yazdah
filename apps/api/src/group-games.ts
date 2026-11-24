@@ -558,17 +558,15 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     if (groupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
     if (!group) return reply.code(404).send({ error: "telegram_group_not_linked" });
 
-    const { data: existing, error: existingError } = await supabase.from("group_local_leagues")
-      .select("competition_id").eq("telegram_chat_id", chatId).maybeSingle();
-    if (existingError) return reply.code(500).send({ error: "local_league_load_failed" });
-    if (existing?.competition_id) return reply.code(409).send({ error: "local_league_already_started" });
-    const result = existing
-      ? await supabase.from("group_local_leagues").update({ enabled: true, activated_by_user_id: userId, activated_at: new Date().toISOString() })
-          .eq("telegram_chat_id", chatId).select("telegram_chat_id,enabled,competition_id").single()
-      : await supabase.from("group_local_leagues").insert({ telegram_chat_id: chatId, enabled: true, activated_by_user_id: userId, activated_at: new Date().toISOString() })
-          .select("telegram_chat_id,enabled,competition_id").single();
-    if (result.error) return reply.code(500).send({ error: "local_league_activate_failed" });
-    return { league: result.data };
+    const { data, error } = await supabase.rpc("activate_group_local_league", {
+      p_chat_id: chatId, p_actor_user_id: userId,
+    });
+    if (error) {
+      if (error.code === "23505") return reply.code(409).send({ error: "local_league_already_started" });
+      request.log.error({ err: error }, "local league activation failed");
+      return reply.code(500).send({ error: "local_league_activate_failed" });
+    }
+    return { league: data };
   });
 
   app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/join", async (request, reply) => {
