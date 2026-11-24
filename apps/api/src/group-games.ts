@@ -499,4 +499,145 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
     }
     return { claimed: true, walletBalance: data };
   });
+  app.get<{ Params: { chatId: string } }>("/groups/:chatId/local-league", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user, error: userError } = await supabase.from("game_users")
+      .select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (userError) return reply.code(500).send({ error: "game_user_lookup_failed" });
+    if (!user) return reply.code(404).send({ error: "game_user_not_found" });
+    const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
+    if (!permission.ok) return reply.code(403).send({ error: "telegram_group_membership_required" });
+
+    const { data: league, error: leagueError } = await supabase.from("group_local_leagues")
+      .select("telegram_chat_id,enabled,activated_by_user_id,activated_at,competition_id")
+      .eq("telegram_chat_id", chatId).maybeSingle();
+    if (leagueError) return reply.code(500).send({ error: "local_league_load_failed" });
+    if (!league) return { league: null, entries: [], standings: [], isAdmin: permission.admin, currentUserId: userId };
+
+    const { data: entries, error: entriesError } = await supabase.from("group_local_league_entries")
+      .select("user_id,club_id,joined_at,club:clubs(name,slug)")
+      .eq("telegram_chat_id", chatId).order("joined_at");
+    if (entriesError) return reply.code(500).send({ error: "local_league_entries_load_failed" });
+
+    let standings: unknown[] = [];
+    if (league.competition_id) {
+      const { data, error } = await supabase.from("competition_entries")
+        .select("club_id,points,played,wins,draws,losses,goals_for,goals_against,club:clubs(name,slug)")
+        .eq("competition_id", league.competition_id)
+        .order("points", { ascending: false })
+        .order("goals_for", { ascending: false })
+        .order("goals_against", { ascending: true });
+      if (error) return reply.code(500).send({ error: "local_league_standings_load_failed" });
+      standings = data ?? [];
+    }
+    return { league, entries: entries ?? [], standings, isAdmin: permission.admin, currentUserId: userId };
+  });
+
+  app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/activate", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user, error: userError } = await supabase.from("game_users")
+      .select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (userError) return reply.code(500).send({ error: "game_user_lookup_failed" });
+    if (!user) return reply.code(404).send({ error: "game_user_not_found" });
+    const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
+    if (!permission.ok || !permission.admin) return reply.code(403).send({ error: "telegram_group_admin_required" });
+    const { data: group, error: groupError } = await supabase.from("telegram_game_groups")
+      .select("telegram_chat_id").eq("telegram_chat_id", chatId).maybeSingle();
+    if (groupError) return reply.code(500).send({ error: "telegram_group_lookup_failed" });
+    if (!group) return reply.code(404).send({ error: "telegram_group_not_linked" });
+
+    const { data: existing, error: existingError } = await supabase.from("group_local_leagues")
+      .select("competition_id").eq("telegram_chat_id", chatId).maybeSingle();
+    if (existingError) return reply.code(500).send({ error: "local_league_load_failed" });
+    if (existing?.competition_id) return reply.code(409).send({ error: "local_league_already_started" });
+    const result = existing
+      ? await supabase.from("group_local_leagues").update({ enabled: true, activated_by_user_id: userId, activated_at: new Date().toISOString() })
+          .eq("telegram_chat_id", chatId).select("telegram_chat_id,enabled,competition_id").single()
+      : await supabase.from("group_local_leagues").insert({ telegram_chat_id: chatId, enabled: true, activated_by_user_id: userId, activated_at: new Date().toISOString() })
+          .select("telegram_chat_id,enabled,competition_id").single();
+    if (result.error) return reply.code(500).send({ error: "local_league_activate_failed" });
+    return { league: result.data };
+  });
+
+  app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/join", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user, error: userError } = await supabase.from("game_users")
+      .select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (userError) return reply.code(500).send({ error: "game_user_lookup_failed" });
+    if (!user) return reply.code(404).send({ error: "game_user_not_found" });
+    const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
+    if (!permission.ok) return reply.code(403).send({ error: "telegram_group_membership_required" });
+    const { data: league, error: leagueError } = await supabase.from("group_local_leagues")
+      .select("enabled,competition_id").eq("telegram_chat_id", chatId).maybeSingle();
+    if (leagueError) return reply.code(500).send({ error: "local_league_load_failed" });
+    if (!league?.enabled || league.competition_id) return reply.code(409).send({ error: "local_league_registration_closed" });
+    const { data: membership, error: membershipError } = await supabase.from("club_memberships")
+      .select("club_id").eq("user_id", userId).eq("role", "owner").maybeSingle();
+    if (membershipError) return reply.code(500).send({ error: "club_lookup_failed" });
+    if (!membership) return reply.code(409).send({ error: "club_required_before_local_league" });
+    const { data, error } = await supabase.from("group_local_league_entries")
+      .insert({ telegram_chat_id: chatId, user_id: userId, club_id: membership.club_id })
+      .select("user_id,club_id,joined_at").single();
+    if (error) {
+      if (error.code === "23505") return reply.code(409).send({ error: "local_league_already_joined" });
+      request.log.error({ err: error }, "local league join failed");
+      return reply.code(500).send({ error: "local_league_join_failed" });
+    }
+    return { joined: true, entry: data };
+  });
+
+  app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/start", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user, error: userError } = await supabase.from("game_users")
+      .select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (userError) return reply.code(500).send({ error: "game_user_lookup_failed" });
+    if (!user) return reply.code(404).send({ error: "game_user_not_found" });
+    const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
+    if (!permission.ok || !permission.admin) return reply.code(403).send({ error: "telegram_group_admin_required" });
+    const { data, error } = await supabase.rpc("start_group_local_league", { p_chat_id: chatId });
+    if (error) {
+      if (error.code === "P0002") return reply.code(404).send({ error: error.message });
+      if (error.code === "22023" || error.code === "23505") return reply.code(409).send({ error: error.message });
+      request.log.error({ err: error }, "local league start failed");
+      return reply.code(500).send({ error: "local_league_start_failed" });
+    }
+    return { started: true, competitionId: data };
+  });
+
+  app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/disable", async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ error: "database_not_configured" });
+    const userId = readSession(request.headers.authorization);
+    if (!userId) return reply.code(401).send({ error: "session_invalid_or_expired" });
+    const chatId = parseChatId(request.params.chatId);
+    if (chatId === null) return reply.code(400).send({ error: "telegram_chat_id_invalid" });
+    const { data: user, error: userError } = await supabase.from("game_users")
+      .select("telegram_user_id").eq("id", userId).maybeSingle();
+    if (userError) return reply.code(500).send({ error: "game_user_lookup_failed" });
+    if (!user) return reply.code(404).send({ error: "game_user_not_found" });
+    const permission = await telegramMember(botToken, chatId, Number(user.telegram_user_id));
+    if (!permission.ok || !permission.admin) return reply.code(403).send({ error: "telegram_group_admin_required" });
+    const { data, error } = await supabase.from("group_local_leagues")
+      .update({ enabled: false }).eq("telegram_chat_id", chatId).is("competition_id", null)
+      .select("telegram_chat_id,enabled,competition_id").maybeSingle();
+    if (error) return reply.code(500).send({ error: "local_league_disable_failed" });
+    if (!data) return reply.code(409).send({ error: "local_league_already_started_or_not_configured" });
+    return { league: data };
+  });
+
 }
