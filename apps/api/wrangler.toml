@@ -10,11 +10,16 @@ ENVIRONMENT = "staging"
 NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
 
-# Preserve the original namespace migration. MatchCoordinator remains exported
-# as a compatibility tombstone until the namespace can be retired safely.
+# Keep the migration ledger aligned with the deployed Worker. Its remote
+# migration tag is v2; omitting v2 makes Wrangler replay v1 and attempt to
+# recreate a legacy Durable Object namespace on the Free plan.
 [[migrations]]
 tag = "v1"
 new_classes = ["MatchCoordinator"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["MatchCoordinator"]
 
 [triggers]
 crons = ["*/15 * * * *"]
