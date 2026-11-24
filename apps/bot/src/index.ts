@@ -16,7 +16,9 @@ const requiredMiniAppUrl: string = miniAppUrl;
 const bot = new Bot(token);
 
 function appSectionUrl(section?: string) {
-  return section ? `${requiredMiniAppUrl}#${section}` : requiredMiniAppUrl;
+  const url = new URL(requiredMiniAppUrl);
+  if (section) url.hash = section;
+  return url.toString();
 }
 
 function appUrlWithParams(params: Record<string, string>) {
