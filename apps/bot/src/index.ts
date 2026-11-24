@@ -211,6 +211,10 @@ bot.command("challenge", async (ctx) => {
 
 bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   const challengeId = ctx.match[1];
+  if (!challengeId) {
+    await ctx.answerCallbackQuery({ text: "شناسهٔ چالش معتبر نیست.", show_alert: true });
+    return;
+  }
   const actor = ctx.callbackQuery.from;
   const message = ctx.callbackQuery.message;
   if (!message || (message.chat.type !== "group" && message.chat.type !== "supergroup")) {
