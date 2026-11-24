@@ -297,7 +297,7 @@ for (const [command, label, section] of [
 async function getServiceStatus() {
   if (!apiUrl) return "ربات فعال است؛ آدرس API در تنظیمات ربات ثبت نشده است.";
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/health`);
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/health`);
     const body = await response.json() as { status?: string; databaseConfigured?: boolean };
     if (!response.ok || body.status !== "ok") return "ربات فعال است، اما API پاسخ سالم نمی‌دهد.";
     return body.databaseConfigured
