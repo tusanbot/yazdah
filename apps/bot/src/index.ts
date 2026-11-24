@@ -29,6 +29,21 @@ function appUrlWithParams(params: Record<string, string>) {
   return url.toString();
 }
 
+const appSections = new Set([
+  "home", "squad-heading", "matches-heading", "market-heading",
+  "academy-heading", "staff-heading", "community-heading", "tactics-heading",
+]);
+
+async function appEntryKeyboard(chatType: string, label: string, section = "home") {
+  const target = appSections.has(section) ? section : "home";
+  if (chatType === "private") {
+    return new InlineKeyboard().webApp(label, target === "home" ? appSectionUrl() : appSectionUrl(target));
+  }
+  const botInfo = await bot.api.getMe();
+  const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`app_${target}`)}`;
+  return new InlineKeyboard().url(label, privateLink);
+}
+
 function mainMenu() {
   return new InlineKeyboard()
     .webApp("🏟 ورود به باشگاه", appSectionUrl())
@@ -50,6 +65,13 @@ function mainMenu() {
 
 bot.command("start", async (ctx) => {
   const payload = ctx.match.trim();
+  const appLink = payload.match(/^app_([a-z-]+)$/i);
+  if (appLink && appSections.has(appLink[1])) {
+    await ctx.reply("برای ادامه، مینی‌اپ یازده را باز کن.", {
+      reply_markup: await appEntryKeyboard("private", "باز کردن یازده", appLink[1]),
+    });
+    return;
+  }
   const groupLink = payload.match(/^group_(-?\d+)(?:_([0-9a-f-]{36}))?$/i);
   if (groupLink) {
     const groupChatId = groupLink[1];
@@ -75,24 +97,30 @@ bot.command("start", async (ctx) => {
 });
 
 bot.command("menu", async (ctx) => {
-  await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
+  if (ctx.chat.type === "private") {
+    await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
+  } else {
+    await ctx.reply("برای باز کردن منوی بازی، یازده را در گفت‌وگوی خصوصی ربات باز کن.", {
+      reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن منوی یازده"),
+    });
+  }
 });
 
 bot.command("club", async (ctx) => {
   await ctx.reply("برای مدیریت باشگاه، ترکیب، تمرین، مسابقات و بازار، مینی‌اپ را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("ورود به باشگاه", requiredMiniAppUrl),
+    reply_markup: await appEntryKeyboard(ctx.chat.type, "ورود به باشگاه"),
   });
 });
 
 bot.command("missions", async (ctx) => {
   await ctx.reply("مأموریت‌ها و پاداش‌های باشگاه از بخش مدیریت باشگاه در مینی‌اپ قابل پیگیری‌اند.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
+    reply_markup: await appEntryKeyboard(ctx.chat.type, "مأموریت‌های باشگاه", "community-heading"),
   });
 });
 
 bot.command("union", async (ctx) => {
   await ctx.reply("برای ایجاد یا پیوستن به اتحادیه و دیدن فهرست اتحادیه‌ها، مینی‌اپ را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
+    reply_markup: await appEntryKeyboard(ctx.chat.type, "اتحادیه‌ها", "community-heading"),
   });
 });
 
@@ -235,7 +263,7 @@ bot.command("games", async (ctx) => {
 
 bot.command("market", async (ctx) => {
   await ctx.reply("برای خریدوفروش بازیکنان، بازار نقل‌وانتقالات یازده را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("بازار نقل‌وانتقالات", requiredMiniAppUrl),
+    reply_markup: await appEntryKeyboard(ctx.chat.type, "بازار نقل‌وانتقالات", "market-heading"),
   });
 });
 
@@ -273,7 +301,7 @@ bot.on("message:new_chat_members", async (ctx) => {
   const addedBot = ctx.message.new_chat_members.some((member) => member.id === bot.botInfo.id);
   if (addedBot) {
     await ctx.reply("ربات یازده به گروه اضافه شد. برای راهنمای چالش‌های گروهی /challenge را بزنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
-      reply_markup: new InlineKeyboard().webApp("باز کردن یازده", requiredMiniAppUrl),
+      reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن یازده"),
     });
   }
 });
@@ -318,7 +346,7 @@ bot.command("group", async (ctx) => {
       return;
     }
     await ctx.reply("گروه با موفقیت به یازده متصل شد. از این پس می‌توان چالش‌های گروهی را برای این گروه ثبت کرد.", {
-      reply_markup: new InlineKeyboard().webApp("مدیریت باشگاه", requiredMiniAppUrl),
+      reply_markup: await appEntryKeyboard(ctx.chat.type, "مدیریت باشگاه"),
     });
   } catch (error) {
     console.error("Telegram group linking failed", error);
