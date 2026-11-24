@@ -114,8 +114,14 @@ export default function HomePage() {
   const slugHint = useMemo(() => clubSlug.trim().toLowerCase(), [clubSlug]);
 
   async function authenticateTelegram(): Promise<AuthResult> {
-    const initData = window.Telegram?.WebApp?.initData;
-    if (!initData) throw new Error("اطلاعات ورود تلگرام دریافت نشد. مینی‌اپ را با دکمه داخل گفت‌وگوی خصوصی ربات باز کن.");
+    // The Telegram script is loaded before hydration, but the WebApp bridge can
+    // become available a moment later on slower clients. Give it a short grace period.
+    let initData = window.Telegram?.WebApp?.initData;
+    for (let attempt = 0; !initData && attempt < 20; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+      initData = window.Telegram?.WebApp?.initData;
+    }
+    if (!initData) throw new Error("اطلاعات ورود تلگرام دریافت نشد. لینک مینی‌اپ را از دکمهٔ داخل گفت‌وگوی خصوصی ربات باز کن و مطمئن شو ربات و دامنهٔ مینی‌اپ درست تنظیم شده‌اند.");
     if (!API_URL) throw new Error("آدرس API تنظیم نشده است.");
 
     window.Telegram?.WebApp?.ready?.();
