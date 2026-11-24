@@ -1,11 +1,12 @@
 import { app } from "./server.js";
 
-let ready: PromiseLike<unknown> | undefined;
-
 export default {
   async fetch(request: Request): Promise<Response> {
-    ready ??= app.ready();
-    await ready;
+    // Do not cache Fastify's readiness promise at module scope. Workers may
+    // reuse module state across requests, while a request-scoped promise must
+    // settle within the request that created it.
+    await app.ready();
+
     const url = new URL(request.url);
     const payload = request.method === "GET" || request.method === "HEAD"
       ? undefined
