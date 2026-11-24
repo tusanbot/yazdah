@@ -22,3 +22,13 @@ export default {
     });
   },
 };
+
+// Keep the historical Durable Object class export available while existing
+// Cloudflare instances still reference its namespace. The current API no
+// longer routes work through this class; retain a safe, explicit tombstone.
+export class MatchCoordinator {
+  async fetch(request: Request): Promise<Response> {
+    void request;
+    return new Response("MatchCoordinator is retired.", { status: 410 });
+  }
+}

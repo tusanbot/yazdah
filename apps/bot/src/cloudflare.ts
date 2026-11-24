@@ -49,3 +49,13 @@ export default {
     }
   },
 };
+
+
+// Retain the historical Durable Object export while the old namespace may
+// still contain instances. The current bot does not route updates through it.
+export class BotUpdateGuard {
+  async fetch(request: Request): Promise<Response> {
+    void request;
+    return new Response("BotUpdateGuard is retired.", { status: 410 });
+  }
+}

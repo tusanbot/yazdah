@@ -97,6 +97,10 @@ bot.command("start", async (ctx) => {
   const groupLink = payload.match(/^group_(-?\d+)(?:_([0-9a-f-]{36}))?$/i);
   if (groupLink) {
     const groupChatId = groupLink[1];
+    if (!groupChatId) {
+      await ctx.reply("شناسهٔ گروه معتبر نیست.");
+      return;
+    }
     const gameId = groupLink[2];
     const appUrl = appUrlWithParams({ groupChatId, ...(gameId ? { gameId } : {}) });
     await ctx.reply("برای ورود به فضای گروه و اجرای چالش، مینی‌اپ را باز کن.", {
@@ -211,6 +215,10 @@ bot.command("challenge", async (ctx) => {
 
 bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   const challengeId = ctx.match[1];
+  if (!challengeId) {
+    await ctx.answerCallbackQuery({ text: "شناسهٔ چالش معتبر نیست.", show_alert: true });
+    return;
+  }
   const actor = ctx.callbackQuery.from;
   const message = ctx.callbackQuery.message;
   if (!message || (message.chat.type !== "group" && message.chat.type !== "supergroup")) {
