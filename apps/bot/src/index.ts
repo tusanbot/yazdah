@@ -281,14 +281,14 @@ bot.command("help", async (ctx) => {
 انواع چالش: draft، penalty، cards، quiz، guess، survival
 نمونه: /game draft 100 یا /game survival 0 20
 مدیریت باشگاه و سایر بخش‌های بازی از طریق مینی‌اپ در دسترس است.`,
-    { reply_markup: mainMenu() },
+    { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
 bot.callbackQuery("help", async (ctx) => {
   await ctx.answerCallbackQuery();
   await ctx.reply(
     "از منوی اصلی وارد باشگاه شو. حساب تلگرام و باشگاهت بین ربات و مینی‌اپ مشترک است.",
-    { reply_markup: mainMenu() },
+    { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
 
