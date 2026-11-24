@@ -414,7 +414,7 @@ ${await getServiceStatus()}`);
 bot.on("message:new_chat_members", async (ctx) => {
   const addedBot = ctx.message.new_chat_members.some((member) => member.id === bot.botInfo.id);
   if (addedBot) {
-    await ctx.reply("ربات یازده به گروه اضافه شد. برای راهنمای چالش‌های گروهی /challenge را بزنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
+    await ctx.reply("⚽ ربات یازده به گروه اضافه شد. برای شروع رقابت گروهی، دکمهٔ بازی‌های گروه را باز کنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
       reply_markup: new InlineKeyboard().url("باز کردن بازی‌های گروه", await groupStartUrl(ctx.chat.id)),
     });
   }
