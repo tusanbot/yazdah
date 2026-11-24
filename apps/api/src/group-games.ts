@@ -587,15 +587,18 @@ export function registerGroupGameRoutes(app: FastifyInstance, deps: Dependencies
       .select("club_id").eq("user_id", userId).eq("role", "owner").maybeSingle();
     if (membershipError) return reply.code(500).send({ error: "club_lookup_failed" });
     if (!membership) return reply.code(409).send({ error: "club_required_before_local_league" });
-    const { data, error } = await supabase.from("group_local_league_entries")
-      .insert({ telegram_chat_id: chatId, user_id: userId, club_id: membership.club_id })
-      .select("user_id,club_id,joined_at").single();
+    const { data, error } = await supabase.rpc("join_group_local_league", {
+      p_chat_id: chatId, p_user_id: userId, p_club_id: membership.club_id,
+    });
     if (error) {
       if (error.code === "23505") return reply.code(409).send({ error: "local_league_already_joined" });
+      if (error.code === "22023") return reply.code(409).send({ error: error.message });
+      if (error.code === "42501") return reply.code(403).send({ error: "local_league_club_not_owned" });
+      if (error.code === "P0002") return reply.code(404).send({ error: "local_league_not_configured" });
       request.log.error({ err: error }, "local league join failed");
       return reply.code(500).send({ error: "local_league_join_failed" });
     }
-    return { joined: true, entry: data };
+    return data;
   });
 
   app.post<{ Params: { chatId: string } }>("/groups/:chatId/local-league/start", async (request, reply) => {
