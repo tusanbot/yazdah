@@ -254,6 +254,16 @@ bot.command("game", async (ctx) => {
   }
 });
 
+bot.command("league", async (ctx) => {
+  if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
+    await ctx.reply("برای مشاهده یا فعال‌سازی لیگ محلی، این فرمان را داخل گروه تلگرام اجرا کن.");
+    return;
+  }
+  await ctx.reply("لیگ محلی اختیاری است؛ مدیر گروه می‌تواند ثبت‌نام را فعال کند و پس از ثبت‌نام دو باشگاه یا بیشتر، لیگ را آغاز کند.", {
+    reply_markup: new InlineKeyboard().url("مدیریت لیگ محلی", await groupStartUrl(ctx.chat.id)),
+  });
+});
+
 bot.command("games", async (ctx) => {
   if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
     await ctx.reply("برای دیدن چالش‌های گروه، این فرمان را داخل گروه تلگرام اجرا کن.");
