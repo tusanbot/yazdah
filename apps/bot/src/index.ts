@@ -34,6 +34,12 @@ const appSections = new Set([
   "academy-heading", "staff-heading", "community-heading", "tactics-heading",
 ]);
 
+async function groupStartUrl(chatId: number | string, gameId?: string) {
+  const botInfo = await bot.api.getMe();
+  const payload = `group_${chatId}${gameId ? `_${gameId}` : ""}`;
+  return `https://t.me/${botInfo.username}?start=${encodeURIComponent(payload)}`;
+}
+
 async function appEntryKeyboard(chatType: string, label: string, section = "home") {
   const target = appSections.has(section) ? section : "home";
   if (chatType === "private") {
@@ -237,9 +243,7 @@ bot.command("game", async (ctx) => {
       await ctx.reply(messages[body.error ?? ""] ?? "ایجاد چالش ناموفق بود؛ کمی بعد دوباره تلاش کن.");
       return;
     }
-    const botInfo = await bot.api.getMe();
-    const startPayload = `group_${ctx.chat.id}_${body.gameId}`;
-    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(startPayload)}`;
+    const privateLink = await groupStartUrl(ctx.chat.id, body.gameId);
     await ctx.reply(
       `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای ورود، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.`,
       { reply_markup: new InlineKeyboard().url("ورود به چالش", privateLink) },
@@ -255,8 +259,7 @@ bot.command("games", async (ctx) => {
     await ctx.reply("برای دیدن چالش‌های گروه، این فرمان را داخل گروه تلگرام اجرا کن.");
     return;
   }
-  const botInfo = await bot.api.getMe();
-  const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${ctx.chat.id}`)}`;
+  const privateLink = await groupStartUrl(ctx.chat.id);
   await ctx.reply("برای مشاهده چالش‌ها، کیف پول و مأموریت‌های گروه، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.", {
     reply_markup: new InlineKeyboard().url("باز کردن چالش‌های گروه", privateLink),
   });
@@ -302,7 +305,7 @@ bot.on("message:new_chat_members", async (ctx) => {
   const addedBot = ctx.message.new_chat_members.some((member) => member.id === bot.botInfo.id);
   if (addedBot) {
     await ctx.reply("ربات یازده به گروه اضافه شد. برای راهنمای چالش‌های گروهی /challenge را بزنید؛ مدیریت باشگاه از مینی‌اپ انجام می‌شود.", {
-      reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن یازده"),
+      reply_markup: new InlineKeyboard().url("باز کردن بازی‌های گروه", await groupStartUrl(ctx.chat.id)),
     });
   }
 });
@@ -347,7 +350,7 @@ bot.command("group", async (ctx) => {
       return;
     }
     await ctx.reply("گروه با موفقیت به یازده متصل شد. از این پس می‌توان چالش‌های گروهی را برای این گروه ثبت کرد.", {
-      reply_markup: await appEntryKeyboard(ctx.chat.type, "مدیریت باشگاه"),
+      reply_markup: new InlineKeyboard().url("باز کردن بازی‌های گروه", await groupStartUrl(ctx.chat.id)),
     });
   } catch (error) {
     console.error("Telegram group linking failed", error);
