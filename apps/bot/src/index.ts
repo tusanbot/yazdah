@@ -97,6 +97,10 @@ bot.command("start", async (ctx) => {
   const groupLink = payload.match(/^group_(-?\d+)(?:_([0-9a-f-]{36}))?$/i);
   if (groupLink) {
     const groupChatId = groupLink[1];
+    if (!groupChatId) {
+      await ctx.reply("شناسهٔ گروه معتبر نیست.");
+      return;
+    }
     const gameId = groupLink[2];
     const appUrl = appUrlWithParams({ groupChatId, ...(gameId ? { gameId } : {}) });
     await ctx.reply("برای ورود به فضای گروه و اجرای چالش، مینی‌اپ را باز کن.", {
