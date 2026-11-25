@@ -215,7 +215,7 @@ bot.command("challenge", async (ctx) => {
   }
   try {
     const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/challenge", { ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id });
-    const { status, data: responseBody } = result;
+    const { data: responseBody } = result;
     const body = responseBody ?? {};
     if (!result.ok) {
       const messages: Record<string, string> = {
@@ -273,7 +273,7 @@ bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   await ctx.answerCallbackQuery({ text: "در حال ثبت پذیرش…" });
   try {
     const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/challenge", { action: "accept", challengeId, telegramUserId: actor.id, telegramChatId: message.chat.id });
-    const { status, data: responseBody } = result;
+    const { data: responseBody } = result;
     const body = responseBody ?? {};
     if (!result.ok) {
       const errors: Record<string, string> = {
@@ -330,7 +330,7 @@ bot.command("game", async (ctx) => {
   }
   try {
     const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/games", { telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, gameType, entryFee, maxParticipants });
-    const { status, data: responseBody } = result;
+    const { data: responseBody } = result;
     const body = responseBody ?? {};
     if (!result.ok) {
       const messages: Record<string, string> = {
@@ -661,7 +661,7 @@ bot.command("group", async (ctx) => {
   }
   try {
     const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/link", { telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, title: ctx.chat.title ?? "گروه تلگرام" });
-    const { status, data: responseBody } = result;
+    const { data: responseBody } = result;
     const body = responseBody ?? {};
     if (!result.ok) {
       const message = body.error === "telegram_group_already_linked"
