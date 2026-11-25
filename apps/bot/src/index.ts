@@ -170,7 +170,8 @@ bot.command("club", async (ctx) => {
     }
     return;
   }
-  if (ctx.chat.type === "private") { await beginClubCreation(ctx); return; }\n  await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.", {
+  if (ctx.chat.type === "private") { await beginClubCreation(ctx); return; }
+  await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.", {
     reply_markup: await appEntryKeyboard(ctx.chat.type, "ورود به باشگاه"),
   });
 });
