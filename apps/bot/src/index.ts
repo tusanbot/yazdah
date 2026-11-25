@@ -594,11 +594,11 @@ bot.on("message:text", async (ctx, next) => {
   try {
     const result = await postInternalApi<{ error?: string; clubId?: string }>(apiUrl, botInternalSecret, "/internal/telegram-clubs/create", { telegramUserId: ctx.from.id, firstName: ctx.from.first_name, lastName: ctx.from.last_name, username: ctx.from.username, name: draft.name, slug: value.toLowerCase() });
     const { status, data: body, error } = result;
-    if (!response.ok) {
+    if (!result.ok) {
       console.error("Guided Telegram club creation API rejected request", {
         endpoint: "/internal/telegram-clubs/create",
         apiOrigin: new URL(apiUrl).origin,
-        status: response.status,
+        status,
         error: body?.error ?? error ?? "unknown_error",
       });
       const messages: Record<string, string> = {
