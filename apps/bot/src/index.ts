@@ -623,6 +623,12 @@ bot.on("message:text", async (ctx, next) => {
     });
     const body = await response.json().catch(() => ({})) as { error?: string; clubId?: string };
     if (!response.ok) {
+      console.error("Guided Telegram club creation API rejected request", {
+        endpoint: "/internal/telegram-clubs/create",
+        apiOrigin: new URL(apiUrl).origin,
+        status: response.status,
+        error: body.error ?? "non_json_error",
+      });
       const messages: Record<string, string> = {
         club_conflict_or_already_owned: "این شناسه تکراری است یا قبلاً باشگاه ساخته‌ای.",
         club_name_or_slug_invalid: "نام یا شناسهٔ باشگاه معتبر نیست.",
