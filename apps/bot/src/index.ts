@@ -214,12 +214,9 @@ bot.command("challenge", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({ ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id }),
-    });
-    const body = await response.json() as { error?: string; challengeId?: string; matchId?: string; accepted?: boolean };
+    const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/challenge", { ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id });
+    const { status, data: responseBody } = result;
+    const body = responseBody ?? {};
     if (!result.ok) {
       const messages: Record<string, string> = {
         telegram_user_not_registered: "ابتدا در مینی‌اپ وارد بازی شو و باشگاهت را بساز.",
@@ -275,15 +272,10 @@ bot.callbackQuery(/^challenge_accept:([0-9a-f-]{36})$/i, async (ctx) => {
   }
   await ctx.answerCallbackQuery({ text: "در حال ثبت پذیرش…" });
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({
-        action: "accept", challengeId, telegramUserId: actor.id, telegramChatId: message.chat.id,
-      }),
-    });
-    const body = await response.json() as { error?: string; matchId?: string };
-    if (!response.ok) {
+    const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/challenge", { action: "accept", challengeId, telegramUserId: actor.id, telegramChatId: message.chat.id });
+    const { status, data: responseBody } = result;
+    const body = responseBody ?? {};
+    if (!result.ok) {
       const errors: Record<string, string> = {
         challenge_not_found: "چالش در این گروه پیدا نشد.",
         challenge_not_available: "این چالش قبلاً پذیرفته شده یا دیگر در دسترس نیست.",
@@ -337,19 +329,10 @@ bot.command("game", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/games`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({
-        telegramUserId: ctx.from.id,
-        telegramChatId: ctx.chat.id,
-        gameType,
-        entryFee,
-        maxParticipants,
-      }),
-    });
-    const body = await response.json() as { error?: string; gameId?: string; maxParticipants?: number; prizePool?: number };
-    if (!response.ok) {
+    const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/games", { telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, gameType, entryFee, maxParticipants });
+    const { status, data: responseBody } = result;
+    const body = responseBody ?? {};
+    if (!result.ok) {
       const messages: Record<string, string> = {
         telegram_group_admin_required: "تأیید مدیر بودن در تلگرام انجام نشد.",
         telegram_group_not_linked: "ابتدا مدیر گروه باید گروه را از بخش بازی‌های گروه در مینی‌اپ به یازده متصل کند.",
@@ -510,20 +493,16 @@ bot.callbackQuery(/^club_section:(overview|squad|matches|finance|missions|academ
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/section`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({ telegramUserId: ctx.from.id, section }),
-      signal: AbortSignal.timeout(10000),
-    });
-    const body = await response.json().catch(() => ({})) as Record<string, any>;
-    if (!response.ok) {
+    const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-clubs/section", { telegramUserId: ctx.from.id, section }, 10_000);
+    const { status, data: responseBody } = result;
+    const body = responseBody ?? {};
+    if (!result.ok) {
       const errors: Record<string, string> = {
         telegram_user_not_registered: "ابتدا با ساخت باشگاه یا ورود از مینی‌اپ، حساب یازده را فعال کن.",
         club_not_found: "هنوز باشگاهی نداری؛ از دکمهٔ «ساخت باشگاه» استفاده کن.",
         database_not_configured: "پایگاه داده در حال حاضر پیکربندی نشده است.",
       };
-      await ctx.reply(errors[String(body.error ?? "")] ?? `دریافت اطلاعات ناموفق بود (کد ${response.status}).`, { reply_markup: mainMenu() });
+      await ctx.reply(errors[String(body.error ?? "")] ?? `دریافت اطلاعات ناموفق بود (کد ${status}).`, { reply_markup: mainMenu() });
       console.error("Telegram club section request failed", { section, status, error: body.error ?? "non_json_error" });
       return;
     }
@@ -681,17 +660,10 @@ bot.command("group", async (ctx) => {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/link`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({
-        telegramUserId: ctx.from.id,
-        telegramChatId: ctx.chat.id,
-        title: ctx.chat.title ?? "گروه تلگرام",
-      }),
-    });
-    const body = await response.json() as { error?: string; linked?: boolean };
-    if (!response.ok) {
+    const result = await postInternalApi<Record<string, any>>(apiUrl, botInternalSecret, "/internal/telegram-groups/link", { telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, title: ctx.chat.title ?? "گروه تلگرام" });
+    const { status, data: responseBody } = result;
+    const body = responseBody ?? {};
+    if (!result.ok) {
       const message = body.error === "telegram_group_already_linked"
         ? "این گروه قبلاً به حساب دیگری متصل شده است؛ برای جلوگیری از تغییر مالکیت، اتصال مجدد مجاز نیست."
         : body.error === "telegram_user_not_registered"
