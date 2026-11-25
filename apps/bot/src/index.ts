@@ -154,7 +154,7 @@ bot.command("challenge", async (ctx) => {
     const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({ ...payload, telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id }),
+      body: JSON.stringify({ ...payload, telegramUserId: ctx.from.id, telegramChatId: chat.id }),
     });
     const body = await response.json() as { error?: string; challengeId?: string; matchId?: string; accepted?: boolean };
     if (!response.ok) {
@@ -219,7 +219,7 @@ bot.command("game", async (ctx) => {
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
         telegramUserId: ctx.from.id,
-        telegramChatId: ctx.chat.id,
+        telegramChatId: chat.id,
         gameType,
         entryFee,
         maxParticipants,
@@ -237,7 +237,7 @@ bot.command("game", async (ctx) => {
       return;
     }
     const botInfo = await bot.api.getMe();
-    const startPayload = `group_${ctx.chat.id}_${body.gameId}`;
+    const startPayload = `group_${chat.id}_${body.gameId}`;
     const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(startPayload)}`;
     await ctx.reply(
       `چالش جدید ایجاد شد!\nنوع: ${gameType}\nورودی: ${entryFee.toLocaleString("fa-IR")} سکه گروه\nجایزه فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه گروه\nشناسه: ${body.gameId}\n\nبرای ورود، دکمه را بزن و در گفت‌وگوی خصوصی ربات Start را انتخاب کن.`,
@@ -335,7 +335,8 @@ bot.callbackQuery("group_game_menu", async (ctx) => {
 
 bot.callbackQuery(/^group_game:(draft|penalty|cards|quiz|guess|survival)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
-  if (!ctx.from || (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup")) {
+  const chat = ctx.chat;
+  if (!ctx.from || !chat || (chat.type !== "group" && chat.type !== "supergroup")) {
     await ctx.reply("این گزینه فقط داخل گروه قابل اجراست.");
     return;
   }
@@ -355,7 +356,7 @@ bot.callbackQuery(/^group_game:(draft|penalty|cards|quiz|guess|survival)$/, asyn
     const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/games`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
-      body: JSON.stringify({ telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, gameType, entryFee: 0, maxParticipants: 2 }),
+      body: JSON.stringify({ telegramUserId: ctx.from.id, telegramChatId: chat.id, gameType, entryFee: 0, maxParticipants: 2 }),
     });
     const body = await response.json() as { error?: string; gameId?: string; prizePool?: number };
     if (!response.ok || !body.gameId) {
@@ -368,7 +369,7 @@ bot.callbackQuery(/^group_game:(draft|penalty|cards|quiz|guess|survival)$/, asyn
       return;
     }
     const botInfo = await bot.api.getMe();
-    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${ctx.chat.id}_${body.gameId}`)}`;
+    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${chat.id}_${body.gameId}`)}`;
     await ctx.reply(`بازی گروهی ساخته شد! نوع: ${gameType}؛ ورودی: ۰ سکه؛ جایزهٔ فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه. برای پیوستن، دکمه را بزن.`, {
       reply_markup: new InlineKeyboard().url("ورود به بازی", privateLink),
     });
@@ -415,7 +416,7 @@ bot.command("group", async (ctx) => {
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({
         telegramUserId: ctx.from.id,
-        telegramChatId: ctx.chat.id,
+        telegramChatId: chat.id,
         title: ctx.chat.title ?? "گروه تلگرام",
       }),
     });
