@@ -146,6 +146,136 @@ app.post<{ Body: { telegramUserId?: number; firstName?: string; lastName?: strin
 });
 
 
+app.post<{ Body: { telegramUserId?: number; section?: string } }>("/internal/telegram-clubs/section", async (request, reply) => {
+  if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "telegram_sections_not_configured" });
+  const supplied = request.headers["x-bot-internal-secret"];
+  if (typeof supplied !== "string") return reply.code(401).send({ error: "bot_auth_required" });
+  const expected = Buffer.from(botInternalSecret);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return reply.code(401).send({ error: "bot_auth_invalid" });
+  }
+  const { telegramUserId, section } = request.body ?? {};
+  const allowedSections = ["overview", "squad", "matches", "finance", "missions", "staff", "academy", "tactics"];
+  if (!Number.isSafeInteger(telegramUserId) || typeof section !== "string" || !allowedSections.includes(section)) {
+    return reply.code(400).send({ error: "telegram_section_input_invalid" });
+  }
+  const { data: user, error: userError } = await supabase.from("game_users")
+    .select("id").eq("telegram_user_id", telegramUserId).maybeSingle();
+  if (userError) {
+    request.log.error({ err: userError }, "telegram section user lookup failed");
+    return reply.code(500).send({ error: "telegram_user_lookup_failed" });
+  }
+  if (!user) return reply.code(404).send({ error: "telegram_user_not_registered" });
+  const { data: membership, error: membershipError } = await supabase.from("club_memberships")
+    .select("club_id").eq("user_id", user.id).eq("role", "owner").maybeSingle();
+  if (membershipError) {
+    request.log.error({ err: membershipError }, "telegram section club lookup failed");
+    return reply.code(500).send({ error: "club_lookup_failed" });
+  }
+  if (!membership) return reply.code(404).send({ error: "club_not_found" });
+  const clubId = membership.club_id;
+
+  if (section === "overview") {
+    const [club, economy, players, matches] = await Promise.all([
+      supabase.from("clubs").select("name,slug,level,reputation,city").eq("id", clubId).single(),
+      supabase.from("club_economy").select("balance").eq("club_id", clubId).single(),
+      supabase.from("players").select("id", { count: "exact", head: true }).eq("club_id", clubId),
+      supabase.from("matches").select("id", { count: "exact", head: true }).or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`),
+    ]);
+    const error = club.error ?? economy.error ?? players.error ?? matches.error;
+    if (error) {
+      request.log.error({ err: error }, "telegram club overview failed");
+      return reply.code(500).send({ error: "club_overview_load_failed" });
+    }
+    return { section, club: club.data, balance: economy.data.balance, playerCount: players.count ?? 0, matchCount: matches.count ?? 0 };
+  }
+
+  if (section === "squad") {
+    const [players, lineup] = await Promise.all([
+      supabase.from("players").select("id,full_name,position,overall,fitness,morale,squad_slot:club_squad_slots(slot_no)")
+        .eq("club_id", clubId).order("overall", { ascending: false }).limit(30),
+      supabase.from("club_tactics").select("formation").eq("club_id", clubId).maybeSingle(),
+    ]);
+    if (players.error || lineup.error) {
+      request.log.error({ players: players.error, lineup: lineup.error }, "telegram squad lookup failed");
+      return reply.code(500).send({ error: "squad_load_failed" });
+    }
+    return { section, players: players.data ?? [], formation: lineup.data?.formation ?? null };
+  }
+
+  if (section === "matches") {
+    const { data, error } = await supabase.from("matches")
+      .select("id,home_club_id,away_club_id,kickoff_at,status,home_score,away_score,home:clubs!matches_home_club_id_fkey(name),away:clubs!matches_away_club_id_fkey(name),competition:competitions(name)")
+      .or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`)
+      .order("kickoff_at", { ascending: false }).limit(8);
+    if (error) {
+      request.log.error({ err: error }, "telegram matches lookup failed");
+      return reply.code(500).send({ error: "matches_load_failed" });
+    }
+    return { section, matches: data ?? [] };
+  }
+
+  if (section === "finance") {
+    const [economy, ledger] = await Promise.all([
+      supabase.from("club_economy").select("balance,updated_at").eq("club_id", clubId).single(),
+      supabase.from("ledger_transactions").select("id,reason,created_at,entries:ledger_entries(amount,memo)")
+        .eq("club_id", clubId).order("created_at", { ascending: false }).limit(5),
+    ]);
+    if (economy.error || ledger.error) {
+      request.log.error({ economy: economy.error, ledger: ledger.error }, "telegram finance lookup failed");
+      return reply.code(500).send({ error: "club_finance_load_failed" });
+    }
+    return { section, balance: economy.data.balance, transactions: ledger.data ?? [] };
+  }
+
+  if (section === "missions") {
+    const { data, error } = await supabase.from("mission_definitions")
+      .select("id,title,description,target_count,reward_coins,progress:club_mission_progress(progress,claimed_at)")
+      .eq("active", true).order("id").limit(20);
+    if (error) {
+      request.log.error({ err: error }, "telegram missions lookup failed");
+      return reply.code(500).send({ error: "missions_load_failed" });
+    }
+    return { section, missions: (data ?? []).map((mission: any) => ({
+      id: mission.id, title: mission.title, targetCount: mission.target_count,
+      reward: mission.reward_coins, progress: mission.progress?.[0]?.progress ?? 0,
+      claimed: Boolean(mission.progress?.[0]?.claimed_at),
+    })) };
+  }
+
+  if (section === "staff") {
+    const { data, error } = await supabase.from("club_staff")
+      .select("full_name,staff_role,staff_tier,skill,weekly_wage,released_at")
+      .eq("club_id", clubId).is("released_at", null).order("hired_at", { ascending: false }).limit(12);
+    if (error) {
+      request.log.error({ err: error }, "telegram staff lookup failed");
+      return reply.code(500).send({ error: "staff_load_failed" });
+    }
+    return { section, staff: data ?? [] };
+  }
+
+  if (section === "academy") {
+    const { data, error } = await supabase.from("academy_players")
+      .select("full_name,position,potential,development,status")
+      .eq("club_id", clubId).order("created_at", { ascending: false }).limit(12);
+    if (error) {
+      request.log.error({ err: error }, "telegram academy lookup failed");
+      return reply.code(500).send({ error: "academy_load_failed" });
+    }
+    return { section, prospects: data ?? [] };
+  }
+
+  const { data, error } = await supabase.from("club_tactics")
+    .select("formation,mentality,tempo,pressing").eq("club_id", clubId).maybeSingle();
+  if (error) {
+    request.log.error({ err: error }, "telegram tactics lookup failed");
+    return reply.code(500).send({ error: "tactics_load_failed" });
+  }
+  return { section, tactics: data ?? null };
+});
+
+
 async function requireAdmin(userId: string) {
   if (!supabase) return { allowed: false, error: "database_not_configured" };
   const { data, error } = await supabase.from("game_admins").select("role").eq("user_id", userId).maybeSingle();
