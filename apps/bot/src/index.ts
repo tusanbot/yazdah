@@ -149,7 +149,7 @@ bot.command("club", async (ctx) => {
       return;
     }
     try {
-      const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-clubs/create`, {
+      const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
         body: JSON.stringify({ telegramUserId: ctx.from.id, firstName: ctx.from.first_name, lastName: ctx.from.last_name, username: ctx.from.username, name, slug }),
