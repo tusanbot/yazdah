@@ -1,5 +1,4 @@
 import Fastify from "fastify";
-import cors from "@fastify/cors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { verifyTelegramInitData } from "./telegram-auth.js";
@@ -10,13 +9,28 @@ import { registerGroupGameRoutes } from "./group-games.js";
 const isCloudflareWorker = typeof navigator !== "undefined" && navigator.userAgent.includes("Cloudflare-Workers");
 const app = Fastify({ logger: !isCloudflareWorker });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
-app.register(cors, {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("origin_not_allowed"), false);
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+
+// Use a native hook instead of the CORS plugin. In the Cloudflare Workers runtime,
+// the plugin's encapsulation lifecycle can time out during app.ready(), preventing
+// every route (including bot-to-API club creation) from being served.
+app.addHook("onRequest", async (request, reply) => {
+  const origin = request.headers.origin;
+  const originAllowed = !origin || allowedOrigins.includes(origin);
+
+  if (origin) reply.header("vary", "Origin");
+  if (origin && originAllowed) reply.header("access-control-allow-origin", origin);
+
+  if (request.method === "OPTIONS") {
+    if (!originAllowed) return reply.code(403).send({ error: "origin_not_allowed" });
+    return reply
+      .header("access-control-allow-methods", "GET, POST, OPTIONS")
+      .header("access-control-allow-headers", "Content-Type, Authorization")
+      .header("access-control-max-age", "86400")
+      .code(204)
+      .send();
+  }
+
+  if (origin && !originAllowed) return reply.code(403).send({ error: "origin_not_allowed" });
 });
 const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
