@@ -67,20 +67,22 @@ async function appEntryKeyboard(chatType: string, label: string, section = "home
 
 function mainMenu() {
   return new InlineKeyboard()
-    .webApp("🏟 ورود به باشگاه", appSectionUrl())
-    .row()
+    .text("🏟 وضعیت باشگاه", "club_section:overview")
     .text("➕ ساخت باشگاه", "club_create_help")
     .row()
-    .webApp("👥 ترکیب و بازیکنان", appSectionUrl("squad-heading"))
-    .webApp("⚽ مسابقات", appSectionUrl("matches-heading"))
+    .text("👥 ترکیب بازیکنان", "club_section:squad")
+    .text("⚽ مسابقات", "club_section:matches")
     .row()
-    .webApp("🔄 نقل‌وانتقالات", appSectionUrl("market-heading"))
-    .webApp("🎓 آکادمی", appSectionUrl("academy-heading"))
+    .text("💰 امور مالی", "club_section:finance")
+    .text("🎯 مأموریت‌ها", "club_section:missions")
     .row()
-    .webApp("🧑‍💼 کادر فنی", appSectionUrl("staff-heading"))
-    .webApp("🏆 مأموریت‌ها و گروه", appSectionUrl("community-heading"))
+    .text("🎓 آکادمی", "club_section:academy")
+    .text("🧑‍💼 کادر فنی", "club_section:staff")
     .row()
-    .webApp("🎯 تاکتیک", appSectionUrl("tactics-heading"))
+    .text("🧠 تاکتیک", "club_section:tactics")
+    .webApp("🔄 بازار نقل‌وانتقالات", appSectionUrl("market-heading"))
+    .row()
+    .webApp("🎮 ورود به مینی‌اپ", appSectionUrl())
     .row()
     .text("📖 راهنما", "help")
     .text("🩺 وضعیت سرویس", "status");
@@ -428,6 +430,119 @@ async function getServiceStatus() {
     return "ربات فعال است، اما ارتباط با API برقرار نشد یا بیش از ۵ ثانیه طول کشید.";
   }
 }
+
+
+const sectionTitles: Record<string, string> = {
+  overview: "🏟 وضعیت باشگاه", squad: "👥 ترکیب بازیکنان", matches: "⚽ مسابقات",
+  finance: "💰 امور مالی", missions: "🎯 مأموریت‌ها", academy: "🎓 آکادمی",
+  staff: "🧑‍💼 کادر فنی", tactics: "🧠 تاکتیک",
+};
+
+function formatDate(value: unknown) {
+  if (typeof value !== "string") return "زمان نامشخص";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "زمان نامشخص" : date.toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tehran" });
+}
+
+function sectionMessage(section: string, data: Record<string, any>) {
+  const title = sectionTitles[section] ?? "باشگاه";
+  if (section === "overview") {
+    const club = data.club ?? {};
+    return `<b>${title}</b>
+نام: ${club.name ?? "—"}
+سطح: ${club.level ?? "—"} | اعتبار: ${club.reputation ?? "—"}
+موجودی: ${Number(data.balance ?? 0).toLocaleString("fa-IR")} سکه
+بازیکنان: ${Number(data.playerCount ?? 0).toLocaleString("fa-IR")}
+مسابقات ثبت‌شده: ${Number(data.matchCount ?? 0).toLocaleString("fa-IR")}`;
+  }
+  if (section === "squad") {
+    const players = Array.isArray(data.players) ? data.players : [];
+    return `<b>${title}</b> | آرایش: ${data.formation ?? "تنظیم نشده"}
+${players.length ? players.map((p: any) => `• ${p.full_name} — ${p.position} | قدرت ${p.overall} | آمادگی ${p.fitness ?? "—"}`).join("\n") : "هنوز بازیکنی در ترکیب ثبت نشده است."}`;
+  }
+  if (section === "matches") {
+    const matches = Array.isArray(data.matches) ? data.matches : [];
+    return `<b>${title}</b>
+${matches.length ? matches.map((m: any) => {
+      const home = m.home?.name ?? "میزبان";
+      const away = m.away?.name ?? "میهمان";
+      const score = m.home_score == null || m.away_score == null ? "—" : `${m.home_score} - ${m.away_score}`;
+      return `• ${home} ${score} ${away}\n  ${formatDate(m.kickoff_at)} | ${m.status ?? "—"}`;
+    }).join("\n") : "هنوز مسابقه‌ای ثبت نشده است."}`;
+  }
+  if (section === "finance") {
+    const recent = Array.isArray(data.transactions) ? data.transactions : [];
+    return `<b>${title}</b>
+موجودی فعلی: ${Number(data.balance ?? 0).toLocaleString("fa-IR")} سکه
+تراکنش‌های اخیر:
+${recent.length ? recent.map((t: any) => {
+      const entries = Array.isArray(t.entries) ? t.entries : [];
+      const amount = entries.reduce((sum: number, entry: any) => sum + Number(entry.amount ?? 0), 0);
+      return `• ${t.reason ?? "تراکنش"}: ${amount.toLocaleString("fa-IR")} سکه`;
+    }).join("\n") : "تراکنشی ثبت نشده است."}`;
+  }
+  if (section === "missions") {
+    const missions = Array.isArray(data.missions) ? data.missions : [];
+    return `<b>${title}</b>
+${missions.length ? missions.map((m: any) => `• ${m.title}: ${m.progress}/${m.targetCount} | پاداش ${Number(m.reward ?? 0).toLocaleString("fa-IR")} سکه ${m.claimed ? "✓ دریافت‌شده" : ""}`).join("\n") : "مأموریتی برای نمایش وجود ندارد."}`;
+  }
+  if (section === "staff") {
+    const staff = Array.isArray(data.staff) ? data.staff : [];
+    return `<b>${title}</b>
+${staff.length ? staff.map((p: any) => `• ${p.full_name} — ${p.staff_role} | مهارت ${p.skill ?? "—"} | دستمزد ${Number(p.weekly_wage ?? 0).toLocaleString("fa-IR")}`).join("\n") : "کادر فنی فعالی ثبت نشده است."}`;
+  }
+  if (section === "academy") {
+    const prospects = Array.isArray(data.prospects) ? data.prospects : [];
+    return `<b>${title}</b>
+${prospects.length ? prospects.map((p: any) => `• ${p.full_name} — ${p.position} | استعداد ${p.potential} | ${p.status}`).join("\n") : "استعدادی در آکادمی ثبت نشده است."}`;
+  }
+  const t = data.tactics;
+  return `<b>${title}</b>
+آرایش: ${t?.formation ?? "—"}
+ذهنیت: ${t?.mentality ?? "—"}
+سرعت بازی: ${t?.tempo ?? "—"}
+پرس: ${t?.pressing ?? "—"}
+برای تغییر تنظیمات تاکتیکی، مینی‌اپ را باز کن.`;
+}
+
+bot.callbackQuery(/^club_section:(overview|squad|matches|finance|missions|academy|staff|tactics)$/, async (ctx) => {
+  const section = ctx.match[1];
+  await ctx.answerCallbackQuery({ text: "در حال دریافت اطلاعات باشگاه…" });
+  if (!ctx.from || !apiUrl || !botInternalSecret) {
+    await ctx.reply("اتصال امن به سرویس باشگاه در دسترس نیست.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/section`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({ telegramUserId: ctx.from.id, section }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const body = await response.json().catch(() => ({})) as Record<string, any>;
+    if (!response.ok) {
+      const errors: Record<string, string> = {
+        telegram_user_not_registered: "ابتدا با ساخت باشگاه یا ورود از مینی‌اپ، حساب یازده را فعال کن.",
+        club_not_found: "هنوز باشگاهی نداری؛ از دکمهٔ «ساخت باشگاه» استفاده کن.",
+        database_not_configured: "پایگاه داده در حال حاضر پیکربندی نشده است.",
+      };
+      await ctx.reply(errors[String(body.error ?? "")] ?? `دریافت اطلاعات ناموفق بود (کد ${response.status}).`, { reply_markup: mainMenu() });
+      console.error("Telegram club section request failed", { section, status: response.status, error: body.error ?? "non_json_error" });
+      return;
+    }
+    await replyRich(ctx, sectionMessage(section, body), sectionMessage(section, body).replace(/<[^>]*>/g, ""), new InlineKeyboard()
+      .text("↻ به‌روزرسانی", `club_section:${section}`)
+      .text("☰ منوی اصلی", "main_menu"));
+  } catch (error) {
+    console.error("Telegram club section request failed", { section, error });
+    await ctx.reply("ارتباط با سرویس باشگاه برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+  }
+});
+
+bot.callbackQuery("main_menu", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
+});
 
 bot.command("status", async (ctx) => {
   await replyRich(ctx, `🩺 <b>وضعیت سرویس</b>
