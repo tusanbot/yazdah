@@ -457,12 +457,12 @@ function sectionMessage(section: string, data: Record<string, any>) {
   }
   if (section === "squad") {
     const players = Array.isArray(data.players) ? data.players : [];
-    return `<b>${title}</b> | آرایش: ${data.formation ?? "تنظیم نشده"}
+    return `${title} | آرایش: ${data.formation ?? "تنظیم نشده"}
 ${players.length ? players.map((p: any) => `• ${p.full_name} — ${p.position} | قدرت ${p.overall} | آمادگی ${p.fitness ?? "—"}`).join("\n") : "هنوز بازیکنی در ترکیب ثبت نشده است."}`;
   }
   if (section === "matches") {
     const matches = Array.isArray(data.matches) ? data.matches : [];
-    return `<b>${title}</b>
+    return `${title}
 ${matches.length ? matches.map((m: any) => {
       const home = m.home_club_id === data.clubId ? "باشگاه شما" : `حریف ${String(m.home_club_id ?? "").slice(0, 6)}`;
       const away = m.away_club_id === data.clubId ? "باشگاه شما" : `حریف ${String(m.away_club_id ?? "").slice(0, 6)}`;
@@ -472,7 +472,7 @@ ${matches.length ? matches.map((m: any) => {
   }
   if (section === "finance") {
     const recent = Array.isArray(data.transactions) ? data.transactions : [];
-    return `<b>${title}</b>
+    return `${title}
 موجودی فعلی: ${Number(data.balance ?? 0).toLocaleString("fa-IR")} سکه
 تراکنش‌های اخیر:
 ${recent.length ? recent.map((t: any) => {
@@ -483,21 +483,21 @@ ${recent.length ? recent.map((t: any) => {
   }
   if (section === "missions") {
     const missions = Array.isArray(data.missions) ? data.missions : [];
-    return `<b>${title}</b>
+    return `${title}
 ${missions.length ? missions.map((m: any) => `• ${m.title}: ${m.progress}/${m.targetCount} | پاداش ${Number(m.reward ?? 0).toLocaleString("fa-IR")} سکه ${m.claimed ? "✓ دریافت‌شده" : ""}`).join("\n") : "مأموریتی برای نمایش وجود ندارد."}`;
   }
   if (section === "staff") {
     const staff = Array.isArray(data.staff) ? data.staff : [];
-    return `<b>${title}</b>
+    return `${title}
 ${staff.length ? staff.map((p: any) => `• ${p.full_name} — ${p.staff_role} | مهارت ${p.skill ?? "—"} | دستمزد ${Number(p.weekly_wage ?? 0).toLocaleString("fa-IR")}`).join("\n") : "کادر فنی فعالی ثبت نشده است."}`;
   }
   if (section === "academy") {
     const prospects = Array.isArray(data.prospects) ? data.prospects : [];
-    return `<b>${title}</b>
+    return `${title}
 ${prospects.length ? prospects.map((p: any) => `• ${p.full_name} — ${p.position} | استعداد ${p.potential} | ${p.status}`).join("\n") : "استعدادی در آکادمی ثبت نشده است."}`;
   }
   const t = data.tactics;
-  return `<b>${title}</b>
+  return `${title}
 آرایش: ${t?.formation ?? "—"}
 ذهنیت: ${t?.mentality ?? "—"}
 سرعت بازی: ${t?.tempo ?? "—"}
