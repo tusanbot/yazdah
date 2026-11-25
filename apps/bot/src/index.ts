@@ -21,18 +21,19 @@ function appSectionUrl(section?: string) {
 
 function mainMenu() {
   return new InlineKeyboard()
-    .webApp("🏟 ورود به باشگاه", appSectionUrl())
+    .text("🏟 باشگاه من", "club")
+    .text("➕ ساخت باشگاه", "club_create_help")
     .row()
-    .webApp("👥 ترکیب و بازیکنان", appSectionUrl("squad-heading"))
-    .webApp("⚽ مسابقات", appSectionUrl("matches-heading"))
+    .text("⚽ مسابقات", "matches")
+    .text("👥 ترکیب بازیکنان", "squad")
     .row()
-    .webApp("🔄 نقل‌وانتقالات", appSectionUrl("market-heading"))
-    .webApp("🎓 آکادمی", appSectionUrl("academy-heading"))
+    .text("🔄 نقل‌وانتقالات", "market")
+    .text("🎓 آکادمی", "academy")
     .row()
-    .webApp("🧑‍💼 کادر فنی", appSectionUrl("staff-heading"))
-    .webApp("🏆 مأموریت‌ها و گروه", appSectionUrl("community-heading"))
+    .text("🏆 مأموریت‌ها و گروه", "community")
+    .text("🎯 تاکتیک", "tactics")
     .row()
-    .webApp("🎯 تاکتیک", appSectionUrl("tactics-heading"))
+    .webApp("🚀 ورود به مینی‌اپ", appSectionUrl())
     .row()
     .text("راهنما", "help")
     .text("وضعیت سرویس", "status");
@@ -69,8 +70,43 @@ bot.command("menu", async (ctx) => {
 });
 
 bot.command("club", async (ctx) => {
-  await ctx.reply("برای مدیریت باشگاه، ترکیب، تمرین، مسابقات و بازار، مینی‌اپ را باز کن.", {
-    reply_markup: new InlineKeyboard().webApp("ورود به باشگاه", requiredMiniAppUrl),
+  const input = ctx.match.trim();
+  if (input.toLowerCase().startsWith("create ")) {
+    const pieces = input.slice(7).split("|").map((part) => part.trim());
+    const name = pieces[0];
+    const slug = pieces[1];
+    if (!ctx.from || ctx.chat.type !== "private" || !name || !slug) {
+      await ctx.reply("ساخت باشگاه در گفت‌وگوی خصوصی: /club create نام باشگاه | slug-english");
+      return;
+    }
+    if (!apiUrl || !botInternalSecret) {
+      await ctx.reply("سرویس ساخت باشگاه در حال حاضر پیکربندی نشده است.");
+      return;
+    }
+    try {
+      const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-clubs/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+        body: JSON.stringify({ telegramUserId: ctx.from.id, firstName: ctx.from.first_name, lastName: ctx.from.last_name, username: ctx.from.username, name, slug }),
+      });
+      const body = await response.json() as { error?: string; clubId?: string };
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          club_conflict_or_already_owned: "این شناسهٔ باشگاه تکراری است یا قبلاً باشگاه ساخته‌ای.",
+          club_name_or_slug_invalid: "نام یا شناسهٔ باشگاه معتبر نیست. شناسه باید انگلیسی و شامل حروف، عدد و خط تیره باشد.",
+        };
+        await ctx.reply(messages[body.error ?? ""] ?? "ساخت باشگاه انجام نشد؛ کمی بعد دوباره تلاش کن.");
+        return;
+      }
+      await ctx.reply(`باشگاهت ساخته شد! شناسه: ${body.clubId}\nاز این پس می‌توانی با /menu به گزینه‌های ربات دسترسی داشته باشی.`, { reply_markup: mainMenu() });
+    } catch (error) {
+      console.error("Telegram-native club creation failed", error);
+      await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+    }
+    return;
+  }
+  await ctx.reply("برای ساخت باشگاه، در گفت‌وگوی خصوصی بنویس:\n/club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars\nبرای باز کردن رابط کامل بازی، از دکمهٔ ورود به مینی‌اپ استفاده کن.", {
+    reply_markup: new InlineKeyboard().text("➕ راهنمای ساخت باشگاه", "club_create_help").row().webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl),
   });
 });
 
@@ -246,7 +282,27 @@ bot.command("help", async (ctx) => {
     { reply_markup: mainMenu() },
   );
 });
-bot.callbackQuery("help", async (ctx) => {
+bot.callbackQuery("club", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("برای دیدن باشگاهت از /club استفاده کن؛ برای ایجاد باشگاه در تلگرام: /club create نام باشگاه | slug-english", { reply_markup: new InlineKeyboard().text("➕ ساخت باشگاه", "club_create_help").webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl) });
+});
+bot.callbackQuery("club_create_help", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("ساخت باشگاه داخل تلگرام: /club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars");
+});
+bot.callbackQuery(/^(matches|squad|market|academy|community|tactics)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const descriptions: Record<string, string> = {
+    matches: "برای مسابقات رسمی و زمان‌بندی، مینی‌اپ را باز کن.",
+    squad: "اطلاعات و مدیریت ترکیب بازیکنان در مینی‌اپ در دسترس است.",
+    market: "بازار نقل‌وانتقالات در مینی‌اپ در دسترس است.",
+    academy: "آکادمی و پرورش بازیکنان در مینی‌اپ در دسترس است.",
+    community: "مأموریت‌ها و امکانات گروهی را از مینی‌اپ دنبال کن.",
+    tactics: "تنظیم تاکتیک‌ها از مینی‌اپ انجام می‌شود.",
+  };
+  await ctx.reply(descriptions[ctx.match] ?? "برای این بخش مینی‌اپ را باز کن.", { reply_markup: new InlineKeyboard().webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl) });
+});
+\nbot.callbackQuery("help", async (ctx) => {
   await ctx.answerCallbackQuery();
   await ctx.reply(
     "از منوی اصلی وارد باشگاه شو. حساب تلگرام و باشگاهت بین ربات و مینی‌اپ مشترک است.",
