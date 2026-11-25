@@ -69,6 +69,8 @@ function mainMenu() {
   return new InlineKeyboard()
     .webApp("🏟 ورود به باشگاه", appSectionUrl())
     .row()
+    .text("➕ ساخت باشگاه", "club_create_help")
+    .row()
     .webApp("👥 ترکیب و بازیکنان", appSectionUrl("squad-heading"))
     .webApp("⚽ مسابقات", appSectionUrl("matches-heading"))
     .row()
@@ -133,7 +135,42 @@ bot.command("menu", async (ctx) => {
 });
 
 bot.command("club", async (ctx) => {
-  await ctx.reply("برای مدیریت باشگاه، ترکیب، تمرین، مسابقات و بازار، مینی‌اپ را باز کن.", {
+  const input = ctx.match.trim();
+  if (input.toLowerCase().startsWith("create ")) {
+    const pieces = input.slice(7).split("|").map((part) => part.trim());
+    const name = pieces[0];
+    const slug = pieces[1];
+    if (!ctx.from || ctx.chat.type !== "private" || !name || !slug) {
+      await ctx.reply("ساخت باشگاه در گفت‌وگوی خصوصی: /club create نام باشگاه | slug-english");
+      return;
+    }
+    if (!apiUrl || !botInternalSecret) {
+      await ctx.reply("سرویس ساخت باشگاه در حال حاضر پیکربندی نشده است.");
+      return;
+    }
+    try {
+      const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+        body: JSON.stringify({ telegramUserId: ctx.from.id, firstName: ctx.from.first_name, lastName: ctx.from.last_name, username: ctx.from.username, name, slug }),
+      });
+      const body = await response.json() as { error?: string; clubId?: string };
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          club_conflict_or_already_owned: "این شناسهٔ باشگاه تکراری است یا قبلاً باشگاه ساخته‌ای.",
+          club_name_or_slug_invalid: "نام یا شناسهٔ باشگاه معتبر نیست. شناسه باید انگلیسی و شامل حروف، عدد و خط تیره باشد.",
+        };
+        await ctx.reply(messages[body.error ?? ""] ?? "ساخت باشگاه انجام نشد؛ کمی بعد دوباره تلاش کن.");
+        return;
+      }
+      await ctx.reply(`باشگاهت ساخته شد! شناسه: ${body.clubId}\nاز این پس می‌توانی با /menu به گزینه‌های ربات دسترسی داشته باشی.`, { reply_markup: mainMenu() });
+    } catch (error) {
+      console.error("Telegram-native club creation failed", error);
+      await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+    }
+    return;
+  }
+  await ctx.reply("برای ساخت باشگاه در گفت‌وگوی خصوصی بنویس:\n/club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars", {
     reply_markup: await appEntryKeyboard(ctx.chat.type, "ورود به باشگاه"),
   });
 });
@@ -404,6 +441,11 @@ bot.command("help", async (ctx) => {
     { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
+bot.callbackQuery("club_create_help", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("ساخت باشگاه داخل گفت‌وگوی خصوصی: /club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars");
+});
+
 bot.callbackQuery("help", async (ctx) => {
   await ctx.answerCallbackQuery();
   await ctx.reply(
