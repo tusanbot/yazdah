@@ -206,14 +206,14 @@ app.post<{ Body: { telegramUserId?: number; section?: string } }>("/internal/tel
 
   if (section === "matches") {
     const { data, error } = await supabase.from("matches")
-      .select("id,home_club_id,away_club_id,kickoff_at,status,home_score,away_score,home:clubs!matches_home_club_id_fkey(name),away:clubs!matches_away_club_id_fkey(name),competition:competitions(name)")
+      .select("id,home_club_id,away_club_id,kickoff_at,status,home_score,away_score,competition:competitions(name)")
       .or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`)
       .order("kickoff_at", { ascending: false }).limit(8);
     if (error) {
       request.log.error({ err: error }, "telegram matches lookup failed");
       return reply.code(500).send({ error: "matches_load_failed" });
     }
-    return { section, matches: data ?? [] };
+    return { section, clubId, matches: data ?? [] };
   }
 
   if (section === "finance") {
