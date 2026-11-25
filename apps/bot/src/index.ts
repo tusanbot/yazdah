@@ -141,6 +141,12 @@ bot.command("challenge", async (ctx) => {
     await ctx.reply("اتصال چالش‌ها هنوز در تنظیمات سرویس فعال نشده است.");
     return;
   }
+  const chat = ctx.chat;
+  if (chat.type !== "group" && chat.type !== "supergroup") {
+    await ctx.reply("این دستور فقط در گروه قابل اجراست.");
+    return;
+  }
+  const chat = ctx.chat;
   const args = ctx.match.trim().split(/\s+/).filter(Boolean);
   const action = args[0]?.toLowerCase() === "accept" ? "accept" : "create";
   const payload = action === "accept"
@@ -395,6 +401,7 @@ bot.on("message:new_chat_members", async (ctx) => {
 
 bot.command("group", async (ctx) => {
   if (!ctx.from) return;
+  const chat = ctx.chat;
   if (ctx.chat.type === "private") {
     await ctx.reply("این دستور را داخل گروه تلگرام اجرا کنید تا راهنمای اتصال گروه و رقابت گروهی را ببینید.");
     return;
