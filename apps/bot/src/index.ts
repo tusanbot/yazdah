@@ -146,7 +146,6 @@ bot.command("challenge", async (ctx) => {
     await ctx.reply("این دستور فقط در گروه قابل اجراست.");
     return;
   }
-  const chat = ctx.chat;
   const args = ctx.match.trim().split(/\s+/).filter(Boolean);
   const action = args[0]?.toLowerCase() === "accept" ? "accept" : "create";
   const payload = action === "accept"
@@ -187,6 +186,11 @@ bot.command("challenge", async (ctx) => {
 
 bot.command("game", async (ctx) => {
   if (!ctx.from) return;
+  const chat = ctx.chat;
+  if (chat.type !== "group" && chat.type !== "supergroup") {
+    await ctx.reply("این فرمان را داخل گروه اجرا کن.");
+    return;
+  }
   if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
     await ctx.reply("این فرمان را داخل گروه متصل اجرا کن. نمونه: /game draft 100 یا /game survival 0 20\nانواع: draft، penalty، cards، quiz، guess، survival");
     return;
