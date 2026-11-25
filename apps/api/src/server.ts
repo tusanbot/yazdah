@@ -268,11 +268,21 @@ app.post<{ Params: { id: string } }>("/admin/notifications/:id/retry", async (re
   return { retried: true, notificationId };
 });
 
-app.get("/health", async () => ({
-  status: "ok",
-  service: "yazdah-api",
-  databaseConfigured: Boolean(supabase),
-}));
+app.get("/health", async (request, reply) => {
+  if (!supabase) {
+    return reply.code(503).send({ status: "unavailable", service: "yazdah-api", database: "not_configured" });
+  }
+
+  // A configured URL/key does not prove that the database is reachable or
+  // that the API credentials can query it. Keep the probe small and read-only.
+  const { error } = await supabase.from("game_users").select("id").limit(1);
+  if (error) {
+    request.log.error({ err: error }, "health database probe failed");
+    return reply.code(503).send({ status: "unavailable", service: "yazdah-api", database: "unreachable" });
+  }
+
+  return { status: "ok", service: "yazdah-api", database: "ok" };
+});
 
 app.post<{ Body: { initData?: string } }>("/auth/telegram", async (request, reply) => {
   if (!supabase || !botToken || !sessionSecret) {
