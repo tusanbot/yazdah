@@ -132,13 +132,21 @@ export default function HomePage() {
     window.Telegram?.WebApp?.ready?.();
     window.Telegram?.WebApp?.expand?.();
 
-    const response = await fetch(`${API_URL}/auth/telegram`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initData }),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error ?? "ورود با تلگرام ناموفق بود.");
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/auth/telegram`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData }),
+        signal: AbortSignal.timeout(12000),
+      });
+    } catch (error) {
+      console.error("Telegram auth request could not reach the API", error);
+      throw new Error("ارتباط با API برقرار نشد. آدرس NEXT_PUBLIC_API_URL و تنظیم CORS_ORIGINS برای دامنهٔ مینی‌اپ را بررسی کن؛ اگر تنظیمات درست است، در دسترس بودن API را بررسی کن.");
+    }
+    const body = await response.json().catch(() => ({})) as { error?: string } & Partial<AuthResult>;
+    if (!response.ok) throw new Error(body.error ?? `ورود با تلگرام ناموفق بود (کد ${response.status}).`);
+    if (!body.accessToken || !body.user) throw new Error("پاسخ ورود API معتبر نیست؛ تنظیمات نسخهٔ API و مینی‌اپ را بررسی کن.");
     return body as AuthResult;
   }
 
