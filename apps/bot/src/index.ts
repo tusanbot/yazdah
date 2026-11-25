@@ -170,7 +170,7 @@ bot.command("club", async (ctx) => {
     }
     return;
   }
-  await ctx.reply("برای ساخت باشگاه در گفت‌وگوی خصوصی بنویس:\n/club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars", {
+  if (ctx.chat.type === "private") { await beginClubCreation(ctx); return; }\n  await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.", {
     reply_markup: await appEntryKeyboard(ctx.chat.type, "ورود به باشگاه"),
   });
 });
@@ -441,9 +441,82 @@ bot.command("help", async (ctx) => {
     { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
+const clubCreationDrafts = new Map<number, { name?: string }>();
+
+async function beginClubCreation(ctx: Context) {
+  if (ctx.chat?.type !== "private" || !ctx.from) {
+    await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.");
+    return;
+  }
+  clubCreationDrafts.set(ctx.from.id, {});
+  await ctx.reply("🏟 ساخت باشگاه\n\nنام باشگاهت را بفرست (۲ تا ۶۰ نویسه).", {
+    reply_markup: new InlineKeyboard().text("لغو", "club_create_cancel"),
+  });
+}
+
 bot.callbackQuery("club_create_help", async (ctx) => {
   await ctx.answerCallbackQuery();
-  await ctx.reply("ساخت باشگاه داخل گفت‌وگوی خصوصی: /club create نام باشگاه | slug-english\nنمونه: /club create ستاره‌های تهران | tehran-stars");
+  await beginClubCreation(ctx);
+});
+
+bot.callbackQuery("club_create_cancel", async (ctx) => {
+  if (ctx.from) clubCreationDrafts.delete(ctx.from.id);
+  await ctx.answerCallbackQuery({ text: "فرایند ساخت باشگاه لغو شد." });
+  await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainMenu() });
+});
+
+bot.on("message:text", async (ctx, next) => {
+  if (ctx.chat.type !== "private" || !ctx.from) return next();
+  const draft = clubCreationDrafts.get(ctx.from.id);
+  if (!draft) return next();
+  const value = ctx.message.text.trim();
+  if (/^\/cancel$/i.test(value)) {
+    clubCreationDrafts.delete(ctx.from.id);
+    await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainMenu() });
+    return;
+  }
+  if (!draft.name) {
+    if (value.length < 2 || value.length > 60) {
+      await ctx.reply("نام باید بین ۲ تا ۶۰ نویسه باشد. دوباره بفرست.");
+      return;
+    }
+    draft.name = value;
+    await ctx.reply("حالا شناسهٔ لاتین باشگاه را بفرست؛ فقط حروف انگلیسی، عدد و خط تیره (۳ تا ۴۰ نویسه).\nنمونه: tehran-stars", {
+      reply_markup: new InlineKeyboard().text("لغو", "club_create_cancel"),
+    });
+    return;
+  }
+  if (!/^[a-z0-9][a-z0-9-]{2,39}$/i.test(value)) {
+    await ctx.reply("شناسه معتبر نیست. از ۳ تا ۴۰ نویسهٔ انگلیسی، عدد یا خط تیره استفاده کن و دوباره بفرست.");
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    clubCreationDrafts.delete(ctx.from.id);
+    await ctx.reply("سرویس ساخت باشگاه در حال حاضر پیکربندی نشده است.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({ telegramUserId: ctx.from.id, firstName: ctx.from.first_name, lastName: ctx.from.last_name, username: ctx.from.username, name: draft.name, slug: value.toLowerCase() }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; clubId?: string };
+    if (!response.ok) {
+      const messages: Record<string, string> = {
+        club_conflict_or_already_owned: "این شناسه تکراری است یا قبلاً باشگاه ساخته‌ای.",
+        club_name_or_slug_invalid: "نام یا شناسهٔ باشگاه معتبر نیست.",
+        club_creation_not_configured: "سرویس ساخت باشگاه هنوز پیکربندی نشده است.",
+      };
+      await ctx.reply(messages[body.error ?? ""] ?? `ساخت باشگاه انجام نشد (کد ${response.status}). کمی بعد دوباره تلاش کن.`);
+      return;
+    }
+    clubCreationDrafts.delete(ctx.from.id);
+    await ctx.reply(`باشگاه «${draft.name}» ساخته شد!\nشناسه: ${body.clubId ?? value}\nاز منوی زیر ادامه بده.`, { reply_markup: mainMenu() });
+  } catch (error) {
+    console.error("Guided Telegram club creation failed", error);
+    await ctx.reply("ارتباط با API برقرار نشد. اتصال سرویس را بررسی کن و دوباره تلاش کن.");
+  }
 });
 
 bot.callbackQuery("help", async (ctx) => {
