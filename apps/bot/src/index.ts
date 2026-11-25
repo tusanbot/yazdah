@@ -300,7 +300,7 @@ bot.callbackQuery(/^(matches|squad|market|academy|community|tactics)$/, async (c
     community: "مأموریت‌ها و امکانات گروهی را از مینی‌اپ دنبال کن.",
     tactics: "تنظیم تاکتیک‌ها از مینی‌اپ انجام می‌شود.",
   };
-  await ctx.reply(descriptions[ctx.match] ?? "برای این بخش مینی‌اپ را باز کن.", { reply_markup: new InlineKeyboard().webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl) });
+  await ctx.reply(descriptions[ctx.match[0]] ?? "برای این بخش مینی‌اپ را باز کن.", { reply_markup: new InlineKeyboard().webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl) });
 });
 
 bot.callbackQuery("help", async (ctx) => {
