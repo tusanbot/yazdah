@@ -27,3 +27,11 @@ crons = ["*/15 * * * *"]
 
 [observability]
 enabled = true
+
+# Cloudflare Build Preview requires an explicit, isolated Preview variable set.
+# Keep these values staging-scoped; secrets and production resources are not copied.
+[previews.vars]
+APP_ENV = "staging"
+ENVIRONMENT = "staging"
+NODE_ENV = "production"
+CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
