@@ -2,7 +2,7 @@ name = "football-empire-api-staging"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-11-23"
 compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup"]
-preview_urls = false
+preview_urls = true
 
 [vars]
 APP_ENV = "staging"
@@ -10,13 +10,12 @@ ENVIRONMENT = "staging"
 NODE_ENV = "production"
 CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
 
-# Keep the migration ledger aligned with the deployed Worker. The remote Worker
-# is already at v1 and owns the MatchCoordinator namespace. Declare that
-# original creation before deleting the class in v2; a deletion-only migration
-# is invalid because Wrangler otherwise has no local history for the class.
+# Preserve the migration history for isolated Preview builds. Free-plan
+# Durable Objects must be introduced as SQLite-backed classes; the following
+# v2 migration removes this legacy class from the final Worker configuration.
 [[migrations]]
 tag = "v1"
-new_classes = ["MatchCoordinator"]
+new_sqlite_classes = ["MatchCoordinator"]
 
 [[migrations]]
 tag = "v2"
@@ -27,3 +26,11 @@ crons = ["*/15 * * * *"]
 
 [observability]
 enabled = true
+
+# Cloudflare Build Preview requires an explicit, isolated Preview variable set.
+# Keep these values staging-scoped; secrets and production resources are not copied.
+[previews.vars]
+APP_ENV = "staging"
+ENVIRONMENT = "staging"
+NODE_ENV = "production"
+CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"

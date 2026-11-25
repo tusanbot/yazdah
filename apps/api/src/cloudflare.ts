@@ -1,11 +1,11 @@
 import { app } from "./server.js";
 
-let ready: PromiseLike<unknown> | undefined;
-
 export default {
   async fetch(request: Request): Promise<Response> {
-    ready ??= app.ready();
-    await ready;
+    // Do not share Fastify's readiness promise across Worker requests. A promise
+    // created in one request can outlive that request in Cloudflare's runtime.
+    await app.ready();
+
     const url = new URL(request.url);
     const payload = request.method === "GET" || request.method === "HEAD"
       ? undefined
