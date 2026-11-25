@@ -2,7 +2,7 @@ name = "football-empire-api-staging"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-11-23"
 compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "allow_eval_during_startup"]
-preview_urls = false
+preview_urls = true
 
 [vars]
 APP_ENV = "staging"
