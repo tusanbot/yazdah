@@ -448,7 +448,7 @@ function sectionMessage(section: string, data: Record<string, any>) {
   const title = sectionTitles[section] ?? "باشگاه";
   if (section === "overview") {
     const club = data.club ?? {};
-    return `<b>${title}</b>
+    return `${title}
 نام: ${club.name ?? "—"}
 سطح: ${club.level ?? "—"} | اعتبار: ${club.reputation ?? "—"}
 موجودی: ${Number(data.balance ?? 0).toLocaleString("fa-IR")} سکه
@@ -464,8 +464,8 @@ ${players.length ? players.map((p: any) => `• ${p.full_name} — ${p.position}
     const matches = Array.isArray(data.matches) ? data.matches : [];
     return `<b>${title}</b>
 ${matches.length ? matches.map((m: any) => {
-      const home = m.home?.name ?? "میزبان";
-      const away = m.away?.name ?? "میهمان";
+      const home = m.home_club_id === data.clubId ? "باشگاه شما" : `حریف ${String(m.home_club_id ?? "").slice(0, 6)}`;
+      const away = m.away_club_id === data.clubId ? "باشگاه شما" : `حریف ${String(m.away_club_id ?? "").slice(0, 6)}`;
       const score = m.home_score == null || m.away_score == null ? "—" : `${m.home_score} - ${m.away_score}`;
       return `• ${home} ${score} ${away}\n  ${formatDate(m.kickoff_at)} | ${m.status ?? "—"}`;
     }).join("\n") : "هنوز مسابقه‌ای ثبت نشده است."}`;
@@ -530,9 +530,9 @@ bot.callbackQuery(/^club_section:(overview|squad|matches|finance|missions|academ
       console.error("Telegram club section request failed", { section, status: response.status, error: body.error ?? "non_json_error" });
       return;
     }
-    await replyRich(ctx, sectionMessage(section, body), sectionMessage(section, body).replace(/<[^>]*>/g, ""), new InlineKeyboard()
+    await ctx.reply(sectionMessage(section, body), { reply_markup: new InlineKeyboard()
       .text("↻ به‌روزرسانی", `club_section:${section}`)
-      .text("☰ منوی اصلی", "main_menu"));
+      .text("☰ منوی اصلی", "main_menu") });
   } catch (error) {
     console.error("Telegram club section request failed", { section, error });
     await ctx.reply("ارتباط با سرویس باشگاه برقرار نشد؛ کمی بعد دوباره تلاش کن.");
@@ -557,7 +557,7 @@ bot.command("help", async (ctx) => {
 از دکمه‌های زیر برای ورود به بخش‌های بازی استفاده کن.
 
 ⚽ رقابت‌های گروهی را مدیران گروه از داخل مینی‌اپ ایجاد و مدیریت می‌کنند.
-🏟️ مدیریت باشگاه و همهٔ بخش‌های بازی در مینی‌اپ در دسترس است.`,
+🏟️ وضعیت باشگاه، ترکیب، مسابقات، مالی، مأموریت‌ها، آکادمی، کادر فنی و تاکتیک را می‌توانی مستقیماً از منوی ربات ببینی. بازار نقل‌وانتقالات و عملیات گرافیکی در مینی‌اپ انجام می‌شود.`,
     { reply_markup: ctx.chat?.type === "private" ? mainMenu() : await appEntryKeyboard(ctx.chat?.type ?? "group", "باز کردن یازده") },
   );
 });
