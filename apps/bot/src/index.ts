@@ -352,7 +352,7 @@ bot.callbackQuery(/^group_game:(draft|penalty|cards|quiz|guess|survival)$/, asyn
   }
   const gameType = ctx.match[1];
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/games`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-groups/games`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({ telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, gameType, entryFee: 0, maxParticipants: 2 }),
