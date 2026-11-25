@@ -506,7 +506,7 @@ ${prospects.length ? prospects.map((p: any) => `• ${p.full_name} — ${p.posit
 }
 
 bot.callbackQuery(/^club_section:(overview|squad|matches|finance|missions|academy|staff|tactics)$/, async (ctx) => {
-  const section = ctx.match[1];
+  const section = ctx.match[1] ?? "overview";
   await ctx.answerCallbackQuery({ text: "در حال دریافت اطلاعات باشگاه…" });
   if (!ctx.from || !apiUrl || !botInternalSecret) {
     await ctx.reply("اتصال امن به سرویس باشگاه در دسترس نیست.");
