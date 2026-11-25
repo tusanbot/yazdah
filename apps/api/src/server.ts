@@ -184,8 +184,8 @@ app.post<{ Body: { telegramUserId?: number; section?: string } }>("/internal/tel
       supabase.from("matches").select("id", { count: "exact", head: true }).or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`),
     ]);
     const error = club.error ?? economy.error ?? players.error ?? matches.error;
-    if (error) {
-      request.log.error({ err: error }, "telegram club overview failed");
+    if (error || !club.data || !economy.data) {
+      request.log.error({ err: error ?? new Error("club_overview_data_missing") }, "telegram club overview failed");
       return reply.code(500).send({ error: "club_overview_load_failed" });
     }
     return { section, club: club.data, balance: economy.data.balance, playerCount: players.count ?? 0, matchCount: matches.count ?? 0 };
