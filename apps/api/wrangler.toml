@@ -23,8 +23,7 @@ new_classes = ["MatchCoordinator"]
 tag = "v2"
 deleted_classes = ["MatchCoordinator"]
 
-[triggers]
-crons = ["*/15 * * * *"]
+# No scheduled handler is registered by this API Worker; avoid a failing no-op cron.
 
 [observability]
 enabled = true
