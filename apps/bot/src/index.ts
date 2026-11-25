@@ -503,7 +503,7 @@ bot.callbackQuery(/^club_section:(overview|squad|matches|finance|missions|academ
         database_not_configured: "پایگاه داده در حال حاضر پیکربندی نشده است.",
       };
       await ctx.reply(errors[String(body.error ?? "")] ?? `دریافت اطلاعات ناموفق بود (کد ${status}).`, { reply_markup: mainMenu() });
-      console.error("Telegram club section request failed", { section, status, error: body.error ?? "non_json_error" });
+      console.error("Telegram club section request failed", { section, status, error: body.error ?? result.error ?? "unknown_error" });
       return;
     }
     await ctx.reply(sectionMessage(section, body), { reply_markup: new InlineKeyboard()
