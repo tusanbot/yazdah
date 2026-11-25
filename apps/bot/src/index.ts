@@ -33,6 +33,8 @@ function mainMenu() {
     .text("🏆 مأموریت‌ها و گروه", "community")
     .text("🎯 تاکتیک", "tactics")
     .row()
+    .text("⚽ ساخت بازی گروهی", "group_game_menu")
+    .row()
     .webApp("🚀 ورود به مینی‌اپ", appSectionUrl())
     .row()
     .text("راهنما", "help")
@@ -309,6 +311,71 @@ bot.callbackQuery("help", async (ctx) => {
     "از منوی اصلی وارد باشگاه شو. حساب تلگرام و باشگاهت بین ربات و مینی‌اپ مشترک است.",
     { reply_markup: mainMenu() },
   );
+});
+
+bot.callbackQuery("group_game_menu", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (ctx.chat?.type !== "group" && ctx.chat?.type !== "supergroup") {
+    await ctx.reply("برای ساخت بازی گروهی، ربات را در گروه اضافه کن و از همان‌جا /menu را باز کن.");
+    return;
+  }
+  const isAdmin = ctx.from ? await ctx.getChatMember(ctx.from.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false) : false;
+  if (!isAdmin) {
+    await ctx.reply("فقط مدیران گروه می‌توانند بازی گروهی بسازند.");
+    return;
+  }
+  const keyboard = new InlineKeyboard()
+    .text("درفت", "group_game:draft").text("پنالتی", "group_game:penalty").row()
+    .text("کارت", "group_game:cards").text("مسابقهٔ اطلاعات", "group_game:quiz").row()
+    .text("حدس", "group_game:guess").text("بقا", "group_game:survival");
+  await ctx.reply("نوع بازی را انتخاب کن. این بازی با ورودی صفر و ظرفیت پیش‌فرض ساخته می‌شود؛ برای تعیین ورودی یا ظرفیت از دستور /game استفاده کن.", { reply_markup: keyboard });
+});
+
+bot.callbackQuery(/^group_game:(draft|penalty|cards|quiz|guess|survival)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!ctx.from || (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup")) {
+    await ctx.reply("این گزینه فقط داخل گروه قابل اجراست.");
+    return;
+  }
+  const isAdmin = await ctx.getChatMember(ctx.from.id).then((member) =>
+    member.status === "creator" || member.status === "administrator",
+  ).catch(() => false);
+  if (!isAdmin) {
+    await ctx.reply("فقط مدیران گروه می‌توانند بازی گروهی بسازند.");
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("سرویس بازی گروهی پیکربندی نشده است.");
+    return;
+  }
+  const gameType = ctx.match[1];
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-groups/games`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({ telegramUserId: ctx.from.id, telegramChatId: ctx.chat.id, gameType, entryFee: 0, maxParticipants: 2 }),
+    });
+    const body = await response.json() as { error?: string; gameId?: string; prizePool?: number };
+    if (!response.ok || !body.gameId) {
+      const messages: Record<string, string> = {
+        telegram_group_not_linked: "ابتدا مدیر گروه باید با دستور /group گروه را به یازده متصل کند.",
+        telegram_user_not_registered: "ابتدا در مینی‌اپ وارد یازده شو و باشگاهت را بساز.",
+        club_required_before_group_game: "برای ساخت بازی باید باشگاه داشته باشی.",
+      };
+      await ctx.reply(messages[body.error ?? ""] ?? "ساخت بازی ناموفق بود؛ وضعیت اتصال گروه و باشگاهت را بررسی کن.");
+      return;
+    }
+    const botInfo = await bot.api.getMe();
+    const privateLink = `https://t.me/${botInfo.username}?start=${encodeURIComponent(`group_${ctx.chat.id}_${body.gameId}`)}`;
+    await ctx.reply(`بازی گروهی ساخته شد! نوع: ${gameType}؛ ورودی: ۰ سکه؛ جایزهٔ فعلی: ${Number(body.prizePool ?? 0).toLocaleString("fa-IR")} سکه. برای پیوستن، دکمه را بزن.`, {
+      reply_markup: new InlineKeyboard().url("ورود به بازی", privateLink),
+    });
+  } catch (error) {
+    console.error("Native group game creation failed", error);
+    await ctx.reply("ارتباط با سرویس بازی برقرار نشد؛ کمی بعد دوباره تلاش کن.");
+  }
 });
 
 bot.callbackQuery("status", async (ctx) => {
