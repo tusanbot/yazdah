@@ -16,7 +16,7 @@ CORS_ORIGINS = "https://football-empire-web-staging.mshmahyar9.workers.dev"
 # is invalid because Wrangler otherwise has no local history for the class.
 [[migrations]]
 tag = "v1"
-new_classes = ["MatchCoordinator"]
+new_sqlite_classes = ["MatchCoordinator"]
 
 [[migrations]]
 tag = "v2"
