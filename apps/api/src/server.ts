@@ -102,6 +102,49 @@ app.post<{ Body: { telegramUserId?: number; telegramChatId?: number; title?: str
   return { linked: true, telegramChatId };
 });
 
+app.post<{ Body: { telegramUserId?: number; firstName?: string; lastName?: string; username?: string; name?: string; slug?: string } }>("/internal/telegram-clubs/create", async (request, reply) => {
+  if (!supabase || !botInternalSecret) return reply.code(503).send({ error: "club_creation_not_configured" });
+  const supplied = request.headers["x-bot-internal-secret"];
+  if (typeof supplied !== "string") return reply.code(401).send({ error: "bot_auth_required" });
+  const expected = Buffer.from(botInternalSecret);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return reply.code(401).send({ error: "bot_auth_invalid" });
+
+  const { telegramUserId, firstName, lastName, username, name, slug } = request.body ?? {};
+  if (!Number.isSafeInteger(telegramUserId) || typeof firstName !== "string" || !firstName.trim() ||
+      typeof name !== "string" || name.trim().length < 2 || name.trim().length > 60 ||
+      typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{2,39}$/i.test(slug)) {
+    return reply.code(400).send({ error: "club_name_or_slug_invalid" });
+  }
+  const { data: user, error: userError } = await supabase.from("game_users").upsert({
+    telegram_user_id: telegramUserId,
+    username: typeof username === "string" ? username : null,
+    first_name: firstName.trim(),
+    last_name: typeof lastName === "string" ? lastName : null,
+    language_code: "fa",
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "telegram_user_id" }).select("id").single();
+  if (userError || !user) {
+    request.log.error({ err: userError }, "telegram club creator account initialization failed");
+    return reply.code(500).send({ error: "account_initialization_failed" });
+  }
+  const { data: clubId, error } = await supabase.rpc("create_club_for_user", {
+    p_user_id: user.id,
+    p_name: name.trim(),
+    p_slug: slug.toLowerCase(),
+    p_logo_url: null,
+    p_country_code: null,
+    p_city: null,
+  });
+  if (error) {
+    if (error.code === "23505") return reply.code(409).send({ error: "club_conflict_or_already_owned" });
+    if (error.code === "22023") return reply.code(400).send({ error: "club_name_or_slug_invalid" });
+    request.log.error({ err: error }, "telegram-native club creation failed");
+    return reply.code(500).send({ error: "club_creation_failed" });
+  }
+  return reply.code(201).send({ clubId });
+});
+
 async function requireAdmin(userId: string) {
   if (!supabase) return { allowed: false, error: "database_not_configured" };
   const { data, error } = await supabase.from("game_admins").select("role").eq("user_id", userId).maybeSingle();
