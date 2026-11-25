@@ -302,7 +302,8 @@ bot.callbackQuery(/^(matches|squad|market|academy|community|tactics)$/, async (c
   };
   await ctx.reply(descriptions[ctx.match] ?? "برای این بخش مینی‌اپ را باز کن.", { reply_markup: new InlineKeyboard().webApp("🚀 ورود به مینی‌اپ", requiredMiniAppUrl) });
 });
-\nbot.callbackQuery("help", async (ctx) => {
+
+bot.callbackQuery("help", async (ctx) => {
   await ctx.answerCallbackQuery();
   await ctx.reply(
     "از منوی اصلی وارد باشگاه شو. حساب تلگرام و باشگاهت بین ربات و مینی‌اپ مشترک است.",
