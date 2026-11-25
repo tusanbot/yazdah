@@ -414,14 +414,18 @@ for (const [command, label, section] of [
 async function getServiceStatus() {
   if (!apiUrl) return "ربات فعال است؛ آدرس API در تنظیمات ربات ثبت نشده است.";
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/health`);
-    const body = await response.json() as { status?: string; databaseConfigured?: boolean };
-    if (!response.ok || body.status !== "ok") return "ربات فعال است، اما API پاسخ سالم نمی‌دهد.";
-    return body.databaseConfigured
-      ? "ربات و API فعال‌اند؛ اتصال پایگاه داده برقرار است."
-      : "ربات و API فعال‌اند، اما پایگاه داده در API پیکربندی نشده است.";
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/health`, { signal: AbortSignal.timeout(5000) });
+    const body = await response.json().catch(() => ({})) as { status?: string; database?: string };
+    if (!response.ok || body.status !== "ok") {
+      return body.database === "unreachable"
+        ? "ربات فعال است؛ API پاسخ می‌دهد اما پایگاه داده در دسترس نیست."
+        : "ربات فعال است، اما API یا پایگاه داده آماده نیست.";
+    }
+    return body.database === "ok"
+      ? "ربات، API و اتصال پایگاه داده پاسخ سالم می‌دهند."
+      : "ربات و API پاسخ سالم می‌دهند؛ وضعیت پایگاه داده تأیید نشده است.";
   } catch {
-    return "ربات فعال است، اما ارتباط با API برقرار نشد.";
+    return "ربات فعال است، اما ارتباط با API برقرار نشد یا بیش از ۵ ثانیه طول کشید.";
   }
 }
 
