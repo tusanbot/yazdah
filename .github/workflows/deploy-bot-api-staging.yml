@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Deploy API staging Worker
-        run: pnpm --dir apps/api exec wrangler deploy --config wrangler.toml
+        run: pnpm --dir apps/miniapp exec wrangler deploy --config ../api/wrangler.toml
 
       - name: Deploy Telegram bot staging Worker
-        run: pnpm --dir apps/bot exec wrangler deploy --config wrangler.toml
+        run: pnpm --dir apps/miniapp exec wrangler deploy --config ../bot/wrangler.toml
