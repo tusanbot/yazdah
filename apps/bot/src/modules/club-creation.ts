@@ -1,4 +1,4 @@
-import type { Bot } from "grammy";
+import type { Bot, Context } from "grammy";
 import { postInternalApi } from "../api-client.js";
 import { mainReplyKeyboard, navigationKeyboard } from "../ui/keyboards.js";
 import { escapeHtml, richText } from "../ui/rich-message.js";
@@ -7,13 +7,13 @@ const pending = new Set<number>();
 const apiUrl = process.env.YAZDAH_API_URL;
 const secret = process.env.BOT_INTERNAL_SECRET;
 
-export async function beginClubCreation(ctx: import("grammy").Context): Promise<void> {
+export async function beginClubCreation(ctx: Context): Promise<void> {
   if (!ctx.from || ctx.chat?.type !== "private") {
     await ctx.reply("برای ساخت باشگاه، ربات را در گفت‌وگوی خصوصی باز کن.");
     return;
   }
   pending.add(ctx.from.id);
-  await ctx.reply("🏟 برای شروع بازی، ابتدا باشگاهت را ثبت کن.\\n\\nنام و شناسهٔ انگلیسی باشگاه را در یک پیام بفرست، با این قالب:\\nنام باشگاه | club-slug\\nنام ۲ تا ۶۰ نویسه و شناسه ۳ تا ۴۰ نویسه باشد؛ شناسه فقط حروف انگلیسی، عدد و خط تیره داشته باشد.", {
+  await ctx.reply("🏟 برای شروع بازی، ابتدا باشگاهت را ثبت کن.\n\nنام و شناسهٔ انگلیسی باشگاه را در یک پیام بفرست، با این قالب:\nنام باشگاه | club-slug\nنام ۲ تا ۶۰ نویسه و شناسه ۳ تا ۴۰ نویسه باشد؛ شناسه فقط حروف انگلیسی، عدد و خط تیره داشته باشد.", {
     reply_markup: navigationKeyboard({ actions: [["✖️ انصراف از ساخت", "club:create:cancel"]] }),
   });
 }
