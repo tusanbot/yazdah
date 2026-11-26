@@ -8,6 +8,7 @@ const appReady = app.ready();
 
 export default {
   async fetch(request: Request): Promise<Response> {
+    await appReady;
     const url = new URL(request.url);
     const payload = request.method === "GET" || request.method === "HEAD"
       ? undefined
