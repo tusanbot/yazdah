@@ -567,6 +567,44 @@ bot.command("help", async (ctx) => {
 });
 const clubCreationDrafts = new Map<number, { name?: string }>();
 
+async function showStartMenuOrRegistration(ctx: Context) {
+  if (ctx.chat?.type !== "private" || !ctx.from) {
+    await beginClubCreation(ctx);
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("سرویس باشگاه در دسترس نیست. کمی بعد دوباره /start را بزن.");
+    return;
+  }
+  try {
+    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-clubs/section`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
+      body: JSON.stringify({ telegramUserId: ctx.from.id, section: "overview" }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (response.ok) {
+      await ctx.reply("به یازده خوش آمدی! از منوی زیر می‌توانی وارد باشگاهت شوی.", {
+        reply_markup: mainMenu(),
+      });
+      return;
+    }
+    if (body.error === "club_not_found" || body.error === "telegram_user_not_registered") {
+      await beginClubCreation(ctx);
+      return;
+    }
+    console.error("Telegram start club check failed", {
+      status: response.status,
+      error: body.error ?? "non_json_error",
+    });
+    await ctx.reply("بررسی وضعیت باشگاه انجام نشد. کمی بعد دوباره /start را بزن.");
+  } catch (error) {
+    console.error("Telegram start club check failed", error);
+    await ctx.reply("ارتباط با سرویس باشگاه برقرار نشد. کمی بعد دوباره /start را بزن.");
+  }
+}
+
 async function beginClubCreation(ctx: Context) {
   if (ctx.chat?.type !== "private" || !ctx.from) {
     await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.");
