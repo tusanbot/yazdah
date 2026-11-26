@@ -113,12 +113,14 @@ async function showSection(ctx: Context, sectionKey: string): Promise<void> {
 }
 export function registerNavigation(bot: Bot): void {
   bot.command(["start", "menu"], showHome);
-  bot.command("help", async (ctx) => {
+  const showHelp = async (ctx: Context) => {
     const list = BOT_COMMANDS.map((item) => `<b>${item.menuLabel}</b> — ${item.description}`).join("\n");
     await ctx.reply(richText("📖 راهنمای یازده", list, "نام بخش‌ها را هم می‌توانی به‌صورت متن بفرستی."), {
       parse_mode: "HTML", reply_markup: mainReplyKeyboard(),
     });
-  });
+  };
+  bot.command("help", showHelp);
+  bot.hears(BOT_COMMANDS.find((item) => item.id === "help")!.menuLabel, showHelp);
   bot.callbackQuery("nav:home", async (ctx) => { await ctx.answerCallbackQuery(); await showHome(ctx); });
   bot.callbackQuery("status:show", async (ctx) => {
     await ctx.answerCallbackQuery();
