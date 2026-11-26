@@ -121,15 +121,19 @@ bot.command("start", async (ctx) => {
     });
     return;
   }
+  if (ctx.chat.type === "private") {
+    await showStartMenuOrRegistration(ctx);
+    return;
+  }
   await ctx.reply(
-    "به یازده خوش آمدی! از اینجا می‌توانی وارد باشگاهت شوی و بازی را از ربات یا مینی‌اپ ادامه بدهی.",
-    { reply_markup: mainMenu() },
+    "به یازده خوش آمدی! برای ادامه، یازده را در گفت‌وگوی خصوصی ربات باز کن.",
+    { reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن یازده") },
   );
 });
 
 bot.command("menu", async (ctx) => {
   if (ctx.chat.type === "private") {
-    await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
+    await showStartMenuOrRegistration(ctx);
   } else {
     await ctx.reply("برای باز کردن منوی بازی، یازده را در گفت‌وگوی خصوصی ربات باز کن.", {
       reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن منوی یازده"),
@@ -539,6 +543,46 @@ bot.command("help", async (ctx) => {
 });
 const clubCreationDrafts = new Map<number, { name?: string }>();
 
+async function showStartMenuOrRegistration(ctx: Context) {
+  if (ctx.chat?.type !== "private" || !ctx.from) {
+    await beginClubCreation(ctx);
+    return;
+  }
+  if (!apiUrl || !botInternalSecret) {
+    await ctx.reply("سرویس باشگاه در دسترس نیست. کمی بعد دوباره /start را بزن.");
+    return;
+  }
+  try {
+    const result = await postInternalApi<Record<string, any>>(
+      apiUrl,
+      botInternalSecret,
+      "/internal/telegram-clubs/section",
+      { telegramUserId: ctx.from.id, section: "overview" },
+      10_000,
+    );
+    const errorCode = String(result.data?.error ?? "");
+    if (result.ok) {
+      await ctx.reply(
+        "به یازده خوش آمدی! از منوی زیر می‌توانی وارد باشگاهت شوی.",
+        { reply_markup: mainMenu() },
+      );
+      return;
+    }
+    if (errorCode === "club_not_found" || errorCode === "telegram_user_not_registered") {
+      await beginClubCreation(ctx);
+      return;
+    }
+    console.error("Telegram start club check failed", {
+      status: result.status,
+      error: errorCode || result.error || "unknown_error",
+    });
+    await ctx.reply("بررسی وضعیت باشگاه انجام نشد. کمی بعد دوباره /start را بزن.");
+  } catch (error) {
+    console.error("Telegram start club check failed", error);
+    await ctx.reply("ارتباط با سرویس باشگاه برقرار نشد. کمی بعد دوباره /start را بزن.");
+  }
+}
+
 async function beginClubCreation(ctx: Context) {
   if (ctx.chat?.type !== "private" || !ctx.from) {
     await ctx.reply("برای ساخت باشگاه، این گزینه را در گفت‌وگوی خصوصی ربات باز کن.");
@@ -558,7 +602,7 @@ bot.callbackQuery("club_create_help", async (ctx) => {
 bot.callbackQuery("club_create_cancel", async (ctx) => {
   if (ctx.from) clubCreationDrafts.delete(ctx.from.id);
   await ctx.answerCallbackQuery({ text: "فرایند ساخت باشگاه لغو شد." });
-  await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainMenu() });
+  await ctx.reply("ثبت‌نام متوقف شد. هر زمان آماده بودی /start را بزن تا ثبت باشگاه را ادامه بدهی.");
 });
 
 bot.on("message:text", async (ctx, next) => {
