@@ -120,15 +120,19 @@ bot.command("start", async (ctx) => {
     });
     return;
   }
+  if (ctx.chat.type === "private") {
+    await showStartMenuOrRegistration(ctx);
+    return;
+  }
   await ctx.reply(
-    "به یازده خوش آمدی! از اینجا می‌توانی وارد باشگاهت شوی و بازی را از ربات یا مینی‌اپ ادامه بدهی.",
-    { reply_markup: mainMenu() },
+    "به یازده خوش آمدی! برای ادامه، یازده را در گفت‌وگوی خصوصی ربات باز کن.",
+    { reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن یازده") },
   );
 });
 
 bot.command("menu", async (ctx) => {
   if (ctx.chat.type === "private") {
-    await ctx.reply("منوی اصلی یازده", { reply_markup: mainMenu() });
+    await showStartMenuOrRegistration(ctx);
   } else {
     await ctx.reply("برای باز کردن منوی بازی، یازده را در گفت‌وگوی خصوصی ربات باز کن.", {
       reply_markup: await appEntryKeyboard(ctx.chat.type, "باز کردن منوی یازده"),
@@ -582,7 +586,7 @@ bot.callbackQuery("club_create_help", async (ctx) => {
 bot.callbackQuery("club_create_cancel", async (ctx) => {
   if (ctx.from) clubCreationDrafts.delete(ctx.from.id);
   await ctx.answerCallbackQuery({ text: "فرایند ساخت باشگاه لغو شد." });
-  await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainMenu() });
+  await ctx.reply("ثبت‌نام متوقف شد. هر زمان آماده بودی /start را بزن تا ثبت باشگاه را ادامه بدهی.");
 });
 
 bot.on("message:text", async (ctx, next) => {
