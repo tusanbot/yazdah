@@ -121,12 +121,15 @@ async function showSection(ctx: Context, sectionKey: string): Promise<void> {
       telegramUserId: ctx.from.id, section: section.id,
     });
     if (!result.ok || !result.data) {
+      const errorCode = result.data?.error ?? result.error ?? "";
+      if (errorCode === "club_not_found" || errorCode === "telegram_user_not_registered") {
+        await beginClubCreation(ctx);
+        return;
+      }
       const messages: Record<string, string> = {
-        telegram_user_not_registered: "ابتدا حساب بازی را ایجاد کن.",
-        club_not_found: "هنوز باشگاهی برای حساب تو ثبت نشده است. از گزینهٔ «➕ ایجاد باشگاه» شروع کن.",
         telegram_sections_not_configured: "این بخش فعلاً در سرویس بازی پیکربندی نشده است.",
       };
-      await ctx.reply(messages[result.data?.error ?? result.error ?? ""] ?? "دریافت اطلاعات ناموفق بود؛ کمی بعد دوباره تلاش کن.", {
+      await ctx.reply(messages[errorCode] ?? "دریافت اطلاعات ناموفق بود؛ کمی بعد دوباره تلاش کن.", {
         reply_markup: navigationKeyboard({ backCallback: "nav:home", homeCallback: "nav:home" }),
       });
       return;
