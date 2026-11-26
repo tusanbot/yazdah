@@ -27,7 +27,7 @@ export function registerClubCreation(bot: Bot): void {
   bot.callbackQuery("club:create:cancel", async (ctx) => {
     await ctx.answerCallbackQuery("فرایند ساخت باشگاه لغو شد.");
     if (ctx.from) pending.delete(ctx.from.id);
-    await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainReplyKeyboard() });
+    await ctx.reply("ثبت باشگاه لغو شد. برای شروع دوباره /start را بفرست.");
   });
 
   bot.on("message:text", async (ctx, next) => {
