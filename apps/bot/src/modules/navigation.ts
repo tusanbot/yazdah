@@ -135,7 +135,8 @@ export function registerNavigation(bot: Bot): void {
     await showSection(ctx, target);
   });
   bot.hears([...LABEL_TO_SECTION.keys()], async (ctx) => {
-    const text = ctx.message?.text ?? "";\n    const id = LABEL_TO_SECTION.get(text);
+    const text = ctx.message?.text ?? "";
+    const id = LABEL_TO_SECTION.get(text);
     if (id) await showSection(ctx, id);
   });
   bot.on("message:text", async (ctx, next) => {
