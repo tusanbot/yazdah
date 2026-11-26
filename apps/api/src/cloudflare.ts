@@ -1,12 +1,12 @@
 import { app } from "./server.js";
 
+// Complete Fastify initialization during Worker module startup, not inside a
+// request. Request-scoped app.ready() promises can outlive their originating
+// request in the Cloudflare Workers runtime.
+await app.ready();
+
 export default {
   async fetch(request: Request): Promise<Response> {
-    // Do not cache Fastify's readiness promise at module scope. Workers may
-    // reuse module state across requests, while a request-scoped promise must
-    // settle within the request that created it.
-    await app.ready();
-
     const url = new URL(request.url);
     const payload = request.method === "GET" || request.method === "HEAD"
       ? undefined
