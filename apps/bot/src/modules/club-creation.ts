@@ -1,6 +1,6 @@
 import type { Bot } from "grammy";
 import { postInternalApi } from "../api-client.js";
-import { mainReplyKeyboard } from "../ui/keyboards.js";
+import { mainReplyKeyboard, navigationKeyboard } from "../ui/keyboards.js";
 import { escapeHtml, richText } from "../ui/rich-message.js";
 
 const pending = new Set<number>();
@@ -15,7 +15,15 @@ export function registerClubCreation(bot: Bot): void {
       return;
     }
     pending.add(ctx.from.id);
-    await ctx.reply("نام و شناسهٔ انگلیسی باشگاه را در یک پیام بفرست، با این قالب:\nنام باشگاه | club-slug\nشناسه باید ۳ تا ۴۰ نویسه و شامل حروف انگلیسی، عدد یا خط تیره باشد.");
+    await ctx.reply("نام و شناسهٔ انگلیسی باشگاه را در یک پیام بفرست، با این قالب:\nنام باشگاه | club-slug\nشناسه باید ۳ تا ۴۰ نویسه و شامل حروف انگلیسی، عدد یا خط تیره باشد.", {
+      reply_markup: navigationKeyboard({ actions: [["✖️ انصراف از ساخت", "club:create:cancel"]] }),
+    });
+  });
+
+  bot.callbackQuery("club:create:cancel", async (ctx) => {
+    await ctx.answerCallbackQuery("فرایند ساخت باشگاه لغو شد.");
+    if (ctx.from) pending.delete(ctx.from.id);
+    await ctx.reply("ساخت باشگاه لغو شد.", { reply_markup: mainReplyKeyboard() });
   });
 
   bot.on("message:text", async (ctx, next) => {
