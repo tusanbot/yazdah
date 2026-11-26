@@ -75,3 +75,11 @@
 
 - بخش‌های اصلی از مسیر داخلی `/internal/telegram-clubs/section` داده می‌گیرند و پاسخ‌های API در پیام‌های HTML امن نمایش داده می‌شوند.
 - ایجاد باشگاه از دکمهٔ «➕ ایجاد باشگاه» شروع می‌شود؛ مرحلهٔ دریافت نام/slug در پیوی است و درخواست از مسیر داخلی ایجاد باشگاه ارسال می‌شود. وضعیت مکالمه فعلاً در حافظهٔ Worker نگهداری می‌شود؛ در بازنویسی بعدی باید به session پایدار/قابل‌بازیابی تبدیل شود.
+
+
+### Follow-up verification fixes (2026-11-26)
+- Added an explicit `overview` route alias so the club overview inline button resolves to the API-backed overview instead of the not-ready fallback.
+- Added cancellation control to the club creation prompt and cleared its in-memory pending state on cancellation.
+- Routed the emoji-labeled help button to the same help handler as `/help`.
+- Routed the service-status inline action locally rather than calling the club data API.
+- The latest branch head has no reported commit checks. The repository CI workflow runs for `main` pull requests/pushes or manual dispatch; no workflow-dispatch action is available in this session, so no build/test result is claimed.
