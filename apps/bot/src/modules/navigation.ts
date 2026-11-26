@@ -129,13 +129,13 @@ export function registerNavigation(bot: Bot): void {
     });
   });
   bot.callbackQuery(/^([a-z]+):([a-z]+)$/, async (ctx) => {
-    const key = ctx.match[0];
+    const key = ctx.match[0] ?? "";
     await ctx.answerCallbackQuery();
     const target = ACTION_SECTION[key] ?? key.split(":")[0];
     await showSection(ctx, target);
   });
   bot.hears([...LABEL_TO_SECTION.keys()], async (ctx) => {
-    const id = LABEL_TO_SECTION.get(ctx.message.text);
+    const text = ctx.message?.text ?? "";\n    const id = LABEL_TO_SECTION.get(text);
     if (id) await showSection(ctx, id);
   });
   bot.on("message:text", async (ctx, next) => {
