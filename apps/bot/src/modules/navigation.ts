@@ -119,13 +119,15 @@ export function registerNavigation(bot: Bot): void {
     });
   });
   bot.callbackQuery("nav:home", async (ctx) => { await ctx.answerCallbackQuery(); await showHome(ctx); });
+  bot.callbackQuery("status:show", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply("🩺 ربات فعال است و درخواست‌ها را دریافت می‌کند.", {
+      reply_markup: navigationKeyboard({ backCallback: "nav:home", homeCallback: "nav:home" }),
+    });
+  });
   bot.callbackQuery(/^([a-z]+):([a-z]+)$/, async (ctx) => {
     const key = ctx.match[0];
     await ctx.answerCallbackQuery();
-    if (key === "club:create") {
-      await ctx.reply("برای ایجاد باشگاه، از فرمان /club در گفت‌وگوی خصوصی استفاده کن. ساخت باشگاه در این مرحله به‌صورت فرم دکمه‌ای تکمیل می‌شود.");
-      return;
-    }
     const target = ACTION_SECTION[key] ?? key.split(":")[0];
     await showSection(ctx, target);
   });
