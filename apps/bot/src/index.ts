@@ -583,7 +583,14 @@ async function showStartMenuOrRegistration(ctx: Context) {
       body: JSON.stringify({ telegramUserId: ctx.from.id, section: "overview" }),
       signal: AbortSignal.timeout(10_000),
     });
-    const body = await response.json().catch(() => ({})) as { error?: string };
+    const responseText = await response.text();
+    const body = (() => {
+      try {
+        return JSON.parse(responseText) as { error?: string };
+      } catch {
+        return {};
+      }
+    })();
     if (response.ok) {
       await ctx.reply("به یازده خوش آمدی! از منوی زیر می‌توانی وارد باشگاهت شوی.", {
         reply_markup: mainMenu(),
@@ -595,8 +602,12 @@ async function showStartMenuOrRegistration(ctx: Context) {
       return;
     }
     console.error("Telegram start club check failed", {
+      apiOrigin: new URL(apiUrl).origin,
+      endpoint: "/internal/telegram-clubs/section",
       status: response.status,
+      contentType: response.headers.get("content-type"),
       error: body.error ?? "non_json_error",
+      responsePreview: responseText.slice(0, 300),
     });
     await ctx.reply("بررسی وضعیت باشگاه انجام نشد. کمی بعد دوباره /start را بزن.");
   } catch (error) {
