@@ -140,7 +140,7 @@ export function registerNavigation(bot: Bot): void {
     if (id) await showSection(ctx, id);
   });
   bot.on("message:text", async (ctx, next) => {
-    const command = resolveTextCommand(ctx.message.text);
+    const command = resolveTextCommand(ctx.message?.text ?? "");
     if (!command || ["start", "menu", "help"].includes(command.id)) return next();
     await showSection(ctx, command.id);
   });
