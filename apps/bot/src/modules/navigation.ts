@@ -26,7 +26,7 @@ const ACTION_SECTION: Record<string, SectionId> = {
   "staff:show": "staff", "tactics:show": "tactics",
 };
 
-type ApiReply = { ok: boolean; status: number; data: Record<string, unknown> | null; error: string | null };
+type SectionPayload = Record<string, unknown> & { error?: string };
 const apiUrl = process.env.YAZDAH_API_URL;
 const botSecret = process.env.BOT_INTERNAL_SECRET;
 
@@ -88,7 +88,7 @@ async function showSection(ctx: Context, sectionKey: string): Promise<void> {
   }
   await ctx.reply("⏳ در حال دریافت اطلاعات...");
   try {
-    const result = await postInternalApi<ApiReply>(apiUrl, botSecret, "/internal/telegram-clubs/section", {
+    const result = await postInternalApi<SectionPayload>(apiUrl, botSecret, "/internal/telegram-clubs/section", {
       telegramUserId: ctx.from.id, section: section.id,
     });
     if (!result.ok || !result.data) {
