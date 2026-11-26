@@ -68,7 +68,10 @@ export function splitRichMessage(message: string, limit = TELEGRAM_TEXT_LIMIT): 
   let current = "";
   for (const line of message.split("\n")) {
     if (line.length > limit) {
-      if (current) chunks.push(current), current = "";
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
       for (let offset = 0; offset < line.length; offset += limit) {
         chunks.push(line.slice(offset, offset + limit));
       }
