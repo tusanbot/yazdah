@@ -7,6 +7,7 @@ import { escapeHtml, richText } from "../ui/rich-message.js";
 type SectionId = "overview" | "squad" | "matches" | "finance" | "missions" | "staff" | "academy" | "tactics";
 type Section = { id: SectionId; title: string; summary: string; actions: readonly (readonly [string, string])[] };
 const SECTIONS: Record<string, Section> = {
+  overview: { id: "overview", title: "🏟 نمای کلی باشگاه", summary: "نمای کلی باشگاه و شاخص‌های اصلی.", actions: [["➕ ایجاد باشگاه", "club:create"]] },
   club: { id: "overview", title: "🏟 باشگاه من", summary: "نمای کلی باشگاه و شاخص‌های اصلی.", actions: [["➕ ایجاد باشگاه", "club:create"], ["📊 نمای کلی", "club:overview"]] },
   matches: { id: "matches", title: "⚽ مسابقات", summary: "مسابقات و نتایج ثبت‌شده.", actions: [["📅 برنامه و نتایج", "matches:show"]] },
   squad: { id: "squad", title: "👥 ترکیب بازیکنان", summary: "بازیکنان و آرایش فعلی تیم.", actions: [["📋 نمایش ترکیب", "squad:show"]] },
