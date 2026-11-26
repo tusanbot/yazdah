@@ -3,6 +3,7 @@ import { BOT_COMMANDS, resolveTextCommand } from "../commands/catalog.js";
 import { postInternalApi } from "../api-client.js";
 import { mainReplyKeyboard, navigationKeyboard } from "../ui/keyboards.js";
 import { escapeHtml, richText } from "../ui/rich-message.js";
+import { beginClubCreation } from "./club-creation.js";
 
 type SectionId = "overview" | "squad" | "matches" | "finance" | "missions" | "staff" | "academy" | "tactics";
 type Section = { id: SectionId; title: string; summary: string; actions: readonly (readonly [string, string])[] };
@@ -71,9 +72,36 @@ function renderData(section: SectionId, data: Record<string, unknown>): string {
 }
 
 async function showHome(ctx: Context): Promise<void> {
-  await ctx.reply(richText("🏟 یازده | منوی اصلی", "یک بخش را انتخاب کن یا میان‌بر متنی آن را بفرست."), {
-    parse_mode: "HTML", reply_markup: mainReplyKeyboard(),
-  });
+  if (ctx.chat?.type !== "private") {
+    await ctx.reply("برای ورود به باشگاه، ربات را در گفت‌وگوی خصوصی باز کن.");
+    return;
+  }
+  if (!ctx.from) return;
+  if (!apiUrl || !botSecret) {
+    await ctx.reply("بررسی باشگاه ممکن نیست؛ اتصال امن ربات به API پیکربندی نشده است. کمی بعد دوباره تلاش کن.");
+    return;
+  }
+  try {
+    const result = await postInternalApi<SectionPayload>(apiUrl, botSecret, "/internal/telegram-clubs/section", {
+      telegramUserId: ctx.from.id, section: "overview",
+    });
+    if (result.ok && result.data) {
+      await ctx.reply(richText("🏟 یازده | منوی اصلی", "باشگاهت ثبت شده است. یک بخش را انتخاب کن یا میان‌بر متنی آن را بفرست."), {
+        parse_mode: "HTML", reply_markup: mainReplyKeyboard(),
+      });
+      return;
+    }
+    const error = result.data?.error ?? result.error;
+    if (error === "club_not_found" || error === "telegram_user_not_registered") {
+      await beginClubCreation(ctx);
+      return;
+    }
+    console.error("Telegram start club check failed", { status: result.status, error: error ?? "unknown_error" });
+    await ctx.reply("بررسی وضعیت باشگاه انجام نشد؛ برای جلوگیری از ورود ناقص، منو فعلاً باز نشد. دوباره /start را بفرست.");
+  } catch (error) {
+    console.error("Telegram start club check failed", error);
+    await ctx.reply("ارتباط با سرویس باشگاه برقرار نشد؛ منو فعلاً باز نشد. کمی بعد /start را دوباره بفرست.");
+  }
 }
 async function showSection(ctx: Context, sectionKey: string): Promise<void> {
   const section = SECTIONS[sectionKey];
