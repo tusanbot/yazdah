@@ -12,7 +12,7 @@ export const MAIN_MENU_ROWS = [
 export function mainReplyKeyboard(): Keyboard {
   const keyboard = new Keyboard();
   for (const row of MAIN_MENU_ROWS) keyboard.text(row[0]).text(row[1]).row();
-  return keyboard.resize().persistent().placeholder("یک بخش را انتخاب کن");
+  return keyboard.resized().persistent().placeholder("یک بخش را انتخاب کن");
 }
 
 export function navigationKeyboard(options: {
