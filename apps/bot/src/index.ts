@@ -577,7 +577,7 @@ async function showStartMenuOrRegistration(ctx: Context) {
     return;
   }
   try {
-    const response = await fetch(`${apiUrl.replace(/\\/$/, "")}/internal/telegram-clubs/section`, {
+    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/telegram-clubs/section`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bot-Internal-Secret": botInternalSecret },
       body: JSON.stringify({ telegramUserId: ctx.from.id, section: "overview" }),
