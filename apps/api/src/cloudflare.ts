@@ -51,9 +51,65 @@ async function handleTelegramSection(request: Request, supabase: any, internalSe
   if (membershipError) return json({ error: "club_lookup_failed" }, 500);
   if (!membership) return json({ error: "club_not_found" }, 404);
 
-  // The bot's /start flow requests the overview. Handle it natively in Workers;
-  // other sections continue through the existing Fastify route adapter.
-  if (body.section !== "overview") return json({ error: "worker_native_section_not_supported" }, 501);
+  const section = body.section;
+  const clubId = membership.club_id;
+  if (section === "overview") {
+    const [club, economy, players, matches] = await Promise.all([
+      supabase.from("clubs").select("name,slug,level,reputation,city").eq("id", clubId).single(),
+      supabase.from("club_economy").select("balance").eq("club_id", clubId).single(),
+      supabase.from("players").select("id", { count: "exact", head: true }).eq("club_id", clubId),
+      supabase.from("matches").select("id", { count: "exact", head: true }).or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`),
+    ]);
+    const error = club.error ?? economy.error ?? players.error ?? matches.error;
+    if (error || !club.data || !economy.data) return json({ error: "club_overview_load_failed" }, 500);
+    return json({ section, club: club.data, balance: economy.data.balance, playerCount: players.count ?? 0, matchCount: matches.count ?? 0 });
+  }
+  if (section === "squad") {
+    const [players, lineup] = await Promise.all([
+      supabase.from("players").select("id,full_name,position,overall,fitness,morale,squad_slot:club_squad_slots(slot_no)").eq("club_id", clubId).order("overall", { ascending: false }).limit(30),
+      supabase.from("club_tactics").select("formation").eq("club_id", clubId).maybeSingle(),
+    ]);
+    if (players.error || lineup.error) return json({ error: "squad_load_failed" }, 500);
+    return json({ section, players: players.data ?? [], formation: lineup.data?.formation ?? null });
+  }
+  if (section === "matches") {
+    const { data, error } = await supabase.from("matches").select("id,home_club_id,away_club_id,kickoff_at,status,home_score,away_score,competition:competitions(name)")
+      .or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`).order("kickoff_at", { ascending: false }).limit(8);
+    if (error) return json({ error: "matches_load_failed" }, 500);
+    return json({ section, clubId, matches: data ?? [] });
+  }
+  if (section === "finance") {
+    const [economy, ledger] = await Promise.all([
+      supabase.from("club_economy").select("balance,updated_at").eq("club_id", clubId).single(),
+      supabase.from("ledger_transactions").select("id,reason,created_at,entries:ledger_entries(amount,memo)").eq("club_id", clubId).order("created_at", { ascending: false }).limit(5),
+    ]);
+    if (economy.error || ledger.error) return json({ error: "club_finance_load_failed" }, 500);
+    return json({ section, balance: economy.data.balance, transactions: ledger.data ?? [] });
+  }
+  if (section === "missions") {
+    const { data, error } = await supabase.from("mission_definitions").select("id,title,description,target_count,reward_coins,progress:club_mission_progress(progress,claimed_at)")
+      .eq("active", true).order("id").limit(20);
+    if (error) return json({ error: "missions_load_failed" }, 500);
+    return json({ section, missions: (data ?? []).map((mission: any) => ({
+      id: mission.id, title: mission.title, targetCount: mission.target_count, reward: mission.reward_coins,
+      progress: mission.progress?.[0]?.progress ?? 0, claimed: Boolean(mission.progress?.[0]?.claimed_at),
+    })) });
+  }
+  if (section === "staff") {
+    const { data, error } = await supabase.from("club_staff").select("full_name,staff_role,staff_tier,skill,weekly_wage,released_at")
+      .eq("club_id", clubId).is("released_at", null).order("hired_at", { ascending: false }).limit(12);
+    if (error) return json({ error: "staff_load_failed" }, 500);
+    return json({ section, staff: data ?? [] });
+  }
+  if (section === "academy") {
+    const { data, error } = await supabase.from("academy_players").select("full_name,position,potential,development,status")
+      .eq("club_id", clubId).order("created_at", { ascending: false }).limit(12);
+    if (error) return json({ error: "academy_load_failed" }, 500);
+    return json({ section, prospects: data ?? [] });
+  }
+  const { data, error } = await supabase.from("club_tactics").select("formation,mentality,tempo,pressing").eq("club_id", clubId).maybeSingle();
+  if (error) return json({ error: "tactics_load_failed" }, 500);
+  return json({ section, tactics: data ?? null });
 
   const clubId = membership.club_id;
   const [club, economy, players, matches] = await Promise.all([
