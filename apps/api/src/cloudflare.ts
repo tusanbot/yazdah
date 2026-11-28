@@ -88,7 +88,7 @@ async function handleTelegramSection(request: Request, supabase: any, internalSe
   }
   if (section === "missions") {
     const { data, error } = await supabase.from("mission_definitions").select("id,title,description,target_count,reward_coins,progress:club_mission_progress(progress,claimed_at)")
-      .eq("active", true).order("id").limit(20);
+      .eq("active", true).eq("progress.club_id", clubId).order("id").limit(20);
     if (error) return json({ error: "missions_load_failed" }, 500);
     return json({ section, missions: (data ?? []).map((mission: any) => ({
       id: mission.id, title: mission.title, targetCount: mission.target_count, reward: mission.reward_coins,
