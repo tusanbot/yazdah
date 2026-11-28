@@ -22,7 +22,7 @@ function sameSecret(actual: string, expected: string): boolean {
   return mismatch === 0;
 }
 
-async function handleTelegramSection(request: Request, supabase: ReturnType<typeof createClient>, internalSecret: string): Promise<Response> {
+async function handleTelegramSection(request: Request, supabase: any, internalSecret: string): Promise<Response> {
   const supplied = request.headers.get("x-bot-internal-secret");
   if (!supplied) return json({ error: "bot_auth_required" }, 401);
   if (!sameSecret(supplied, internalSecret)) return json({ error: "bot_auth_invalid" }, 401);
@@ -37,7 +37,7 @@ async function handleTelegramSection(request: Request, supabase: ReturnType<type
   }
 
   const allowedSections = ["overview", "squad", "matches", "finance", "missions", "staff", "academy", "tactics"];
-  if (!Number.isSafeInteger(body.telegramUserId) || typeof body.section !== "string" || !allowedSections.includes(body.section)) {
+  if (typeof body.telegramUserId !== "number" || !Number.isSafeInteger(body.telegramUserId) || typeof body.section !== "string" || !allowedSections.includes(body.section)) {
     return json({ error: "telegram_section_input_invalid" }, 400);
   }
 
@@ -70,7 +70,7 @@ async function handleTelegramSection(request: Request, supabase: ReturnType<type
   });
 }
 
-async function handleTelegramClubCreate(request: Request, supabase: ReturnType<typeof createClient>, internalSecret: string): Promise<Response> {
+async function handleTelegramClubCreate(request: Request, supabase: any, internalSecret: string): Promise<Response> {
   const supplied = request.headers.get("x-bot-internal-secret");
   if (!supplied) return json({ error: "bot_auth_required" }, 401);
   if (!sameSecret(supplied, internalSecret)) return json({ error: "bot_auth_invalid" }, 401);
@@ -85,7 +85,7 @@ async function handleTelegramClubCreate(request: Request, supabase: ReturnType<t
   }
 
   const { telegramUserId, firstName, lastName, username, name, slug } = body;
-  if (!Number.isSafeInteger(telegramUserId) || typeof firstName !== "string" || !firstName.trim() ||
+  if (typeof telegramUserId !== "number" || !Number.isSafeInteger(telegramUserId) || typeof firstName !== "string" || !firstName.trim() ||
       typeof name !== "string" || name.trim().length < 2 || name.trim().length > 60 ||
       typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{2,39}$/i.test(slug)) {
     return json({ error: "club_name_or_slug_invalid" }, 400);
