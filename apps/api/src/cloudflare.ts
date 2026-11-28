@@ -111,19 +111,7 @@ async function handleTelegramSection(request: Request, supabase: any, internalSe
   if (error) return json({ error: "tactics_load_failed" }, 500);
   return json({ section, tactics: data ?? null });
 
-  const clubId = membership.club_id;
-  const [club, economy, players, matches] = await Promise.all([
-    supabase.from("clubs").select("name,slug,level,reputation,city").eq("id", clubId).single(),
-    supabase.from("club_economy").select("balance").eq("club_id", clubId).single(),
-    supabase.from("players").select("id", { count: "exact", head: true }).eq("club_id", clubId),
-    supabase.from("matches").select("id", { count: "exact", head: true }).or(`home_club_id.eq.${clubId},away_club_id.eq.${clubId}`),
-  ]);
-  const error = club.error ?? economy.error ?? players.error ?? matches.error;
-  if (error || !club.data || !economy.data) return json({ error: "club_overview_load_failed" }, 500);
-  return json({
-    section: "overview", club: club.data, balance: economy.data.balance,
-    playerCount: players.count ?? 0, matchCount: matches.count ?? 0,
-  });
+
 }
 
 async function handleTelegramClubCreate(request: Request, supabase: any, internalSecret: string): Promise<Response> {
