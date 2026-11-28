@@ -1,14 +1,7 @@
 import { app } from "./server.js";
 
-// Start Fastify's readiness lifecycle once while the Worker module is being
-// evaluated. Do not await it at module scope (Workers reject top-level await),
-// and do not create it inside fetch (the request context may end before it
-// settles). All requests share this module-scoped initialization promise.
-const appReady = app.ready();
-
 export default {
   async fetch(request: Request): Promise<Response> {
-    await appReady;
     const url = new URL(request.url);
     const payload = request.method === "GET" || request.method === "HEAD"
       ? undefined
